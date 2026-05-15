@@ -1,7 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 // @ts-expect-error — provided by @cloudflare/vitest-pool-workers at runtime
-import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { env, createExecutionContext, fetchMock, waitOnExecutionContext } from "cloudflare:test";
 import worker from "../worker";
 import { createAnthropicMock } from "./harness/anthropic-mock";
 import { createJwksMock } from "./harness/jwks-mock";
@@ -88,49 +87,78 @@ describe("Worker boot + Anthropic SSE mock", () => {
   });
 });
 
-describe("JWKS mock issues verifiable JWTs", () => {
-  it("verifies a valid JWT and rejects a forged one against the same JWKS", async () => {
+describe("JWKS injection wired through Worker /admin route", () => {
+  const jwksUrl = "https://test-access.internal/cdn-cgi/access/certs";
+
+  beforeEach(() => {
+    fetchMock.activate();
+    fetchMock.disableNetConnect();
+    (env as Record<string, string>).ACCESS_JWKS_URL_OVERRIDE = jwksUrl;
+  });
+
+  afterEach(() => {
+    fetchMock.deactivate();
+  });
+
+  it("Worker /admin accepts a valid JWT and rejects a forged one", async () => {
     const jwks = await createJwksMock();
-    const jwksUrl = "https://jwks.test/cdn-cgi/access/certs";
+    const jwksBody = JSON.stringify(await jwks.getJwks());
 
-    const realFetch = globalThis.fetch;
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      if (url === jwksUrl) {
-        return jwks.fetchHandler(new Request(url));
-      }
-      return realFetch(input as RequestInfo);
-    }) as typeof fetch;
+    // Two interceptors: createRemoteJWKSet is created per-request in
+    // handleAdmin, so each /admin call performs its own JWKS fetch.
+    const pool = fetchMock.get("https://test-access.internal");
+    pool
+      .intercept({ path: "/cdn-cgi/access/certs", method: "GET" })
+      .reply(200, jwksBody, { headers: { "content-type": "application/json" } });
+    pool
+      .intercept({ path: "/cdn-cgi/access/certs", method: "GET" })
+      .reply(200, jwksBody, { headers: { "content-type": "application/json" } });
 
-    try {
-      const valid = await jwks.issueJwt({
-        aud: "aud-123",
-        iss: "https://team.cloudflareaccess.com",
-        email: "owner@example.com",
-      });
-      const forged = await jwks.issueJwt({
-        aud: "aud-123",
-        iss: "https://team.cloudflareaccess.com",
-        email: "owner@example.com",
-        forge: true,
-      });
+    const validJwt = await jwks.issueJwt({
+      aud: "aud-123",
+      iss: "https://team.cloudflareaccess.com",
+      email: "owner@example.com",
+    });
+    const forgedJwt = await jwks.issueJwt({
+      aud: "aud-123",
+      iss: "https://team.cloudflareaccess.com",
+      email: "owner@example.com",
+      forge: true,
+    });
 
-      const remoteJwks = createRemoteJWKSet(new URL(jwksUrl));
+    const ctxA = createExecutionContext();
+    const validRes = await worker.fetch(
+      new Request("https://example.test/admin", {
+        headers: { "CF-Access-JWT-Assertion": validJwt },
+      }),
+      env as never,
+      ctxA,
+    );
+    await waitOnExecutionContext(ctxA);
+    expect(validRes.status).toBe(200);
+    const validBody = (await validRes.json()) as { email: string };
+    expect(validBody.email).toBe("owner@example.com");
 
-      const { payload } = await jwtVerify(valid, remoteJwks, {
-        audience: "aud-123",
-        issuer: "https://team.cloudflareaccess.com",
-      });
-      expect(payload.email).toBe("owner@example.com");
+    const ctxB = createExecutionContext();
+    const forgedRes = await worker.fetch(
+      new Request("https://example.test/admin", {
+        headers: { "CF-Access-JWT-Assertion": forgedJwt },
+      }),
+      env as never,
+      ctxB,
+    );
+    await waitOnExecutionContext(ctxB);
+    expect(forgedRes.status).toBe(403);
+  });
 
-      await expect(
-        jwtVerify(forged, remoteJwks, {
-          audience: "aud-123",
-          issuer: "https://team.cloudflareaccess.com",
-        }),
-      ).rejects.toThrow();
-    } finally {
-      globalThis.fetch = realFetch;
-    }
+  it("Worker /admin returns 403 when the CF-Access-JWT-Assertion header is absent", async () => {
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(
+      new Request("https://example.test/admin"),
+      env as never,
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(403);
   });
 });
