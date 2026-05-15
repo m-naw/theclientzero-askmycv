@@ -1,0 +1,193 @@
+# .strategos/project-memory.yaml
+# v3.5 iter2: persistent cross-goal + cross-run memory
+# Append-only. Each entry is a goal-completion event.
+
+entries:
+  - goal_id: G2
+    strategy_id: STR-da3dac65-e70d-4da6-96f9-5a55549aa405
+    completed_at: 2026-05-15T11:54:43.099Z
+    summary: "Goal G2: Project foundation & Workers-grade test harness completed
+      (holistic)."
+    findings:
+      - category: observation
+        text: "All 12 done-when criteria are MET. The workspace contains a complete,
+          buildable, testable Workers foundation: wrangler.toml with STATE KV
+          binding (no secrets), package.json with correct scripts, AGPL-3.0
+          LICENSE, cv.example.md (2916 chars), README with Deploy-to-Cloudflare
+          button pointing at m-naw/theclientzero-askmycv, test harness at
+          src/test/harness/ with Anthropic mock (correct SSE contract) and JWKS
+          mock (env-injection, no globals), and pnpm build/test/typecheck all
+          pass with exit 0 (8 smoke tests green inside miniflare)."
+    affected_files:
+      - package.json
+      - pnpm-lock.yaml
+      - wrangler.toml
+      - tsconfig.json
+      - src/worker.ts
+      - src/test-harness/
+      - vitest.config.ts
+      - LICENSE
+      - cv.example.md
+      - README.md
+      - docs/
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G3
+    strategy_id: STR-da3dac65-e70d-4da6-96f9-5a55549aa405
+    completed_at: 2026-05-15T12:04:14.299Z
+    summary: "Goal G3: UI/UX foundation — design system & view templates completed
+      (holistic)."
+    findings:
+      - category: observation
+        text: "All 10 done-when criteria for G3 are MET. The workspace contains a
+          complete design-system layer: design-tokens.ts as the sole literal
+          sink, four typed view templates (chat-page, setup-instructions,
+          setup-form, admin-form), a comprehensive error/expired/denied page
+          family, client-side sprinkles (streaming.ts, polling.ts), and six test
+          files covering every surface. Build, typecheck, and 44 tests all pass.
+          Note: strategos:strategos-target-repo-conventions skill was
+          unavailable; review proceeded in read-only judicial mode with no git
+          operations performed."
+    affected_files:
+      - src/views/
+      - src/views/chat-page.ts
+      - src/views/setup-instructions.ts
+      - src/views/setup-form.ts
+      - src/views/admin-form.ts
+      - src/views/error-pages.ts
+      - src/views/design-tokens.ts
+      - src/views/primitives/
+      - src/views/client/streaming.ts
+      - src/__tests__/views/
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G4
+    strategy_id: STR-da3dac65-e70d-4da6-96f9-5a55549aa405
+    completed_at: 2026-05-15T13:41:23.900Z
+    summary: "Goal G4: Auth + setup state machine behavior (F2 + F3) completed."
+    findings:
+      - category: observation
+        text: "Iteration ITR-1778848868023 (G4) PASSES: all 13 criteria are MET. Commit
+          2f111b0 (feat: rename-config-fields-and-add-admin-route) resolved the
+          three previously-unmet items: (1) 'headline' restored to
+          REQUIRED_SETUP_FIELDS and form template consistent with handler; (2)
+          'system' field added to the Anthropic test call completing the
+          required Messages API shape; (3) /admin route implemented eliminating
+          the 404 smoke-test failures. Build, typecheck, and test all exit 0
+          with 76 tests passing. GR-ITER-003 observation: one uncommitted test
+          addition in setup-acceptance.test.ts (daily_budget_usd validation) —
+          not a criterion failure, but the working tree is not clean at
+          handoff."
+    affected_files:
+      - src/worker.ts
+      - src/routes/
+      - src/auth/
+      - src/state/
+      - src/__tests__/setup/
+      - src/__tests__/state-machine/
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G4
+    strategy_id: STR-da3dac65-e70d-4da6-96f9-5a55549aa405
+    completed_at: 2026-05-15T14:07:17.166Z
+    summary: "Goal G4: Auth + setup state machine behavior (F2 + F3) completed."
+    findings:
+      - category: observation
+        text: All 13 done-when criteria are MET. The state machine
+          (unconfigured→configured), JWT verification via jose, setup-form
+          rendering, POST /setup field validation, Anthropic test-call, KV
+          persistence with JWT claims, setup window expiry, and recovery path
+          are all correctly implemented and tested. pnpm build/typecheck/test
+          all pass (exit 0) with 76 tests; acceptance scenarios 1-5 from spec.md
+          §12 are covered by src/__tests__/setup/setup-acceptance.test.ts.
+    affected_files:
+      - src/worker.ts
+      - src/routes/
+      - src/auth/
+      - src/state/
+      - src/__tests__/setup/
+      - src/__tests__/state-machine/
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G5
+    strategy_id: STR-da3dac65-e70d-4da6-96f9-5a55549aa405
+    completed_at: 2026-05-15T15:00:23.303Z
+    summary: "Goal G5: Public chat behavior (F4) completed."
+    findings:
+      - category: observation
+        text: "All 10 done-when criteria are MET. The G5 implementation is complete: GET
+          / renders the chat-page with owner profile fields and suggested
+          questions; POST /chat streams SSE with correct validation (400 on bad
+          input), 12-turn cap, 1500-char truncation, max_tokens=512, and a
+          system prompt containing cv_markdown plus all required behavioral
+          instructions. Acceptance Test 6 is implemented and all 119 tests pass
+          with clean build and typecheck."
+    affected_files:
+      - src/worker.ts
+      - src/routes/chat.ts
+      - src/routes/index.ts
+      - src/prompts/system.ts
+      - src/__tests__/chat/
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G6
+    strategy_id: STR-da3dac65-e70d-4da6-96f9-5a55549aa405
+    completed_at: 2026-05-15T16:06:47.527Z
+    summary: "Goal G6: Anti-abuse + daily budget cap (F6 + F7) completed."
+    findings:
+      - category: observation
+        text: "All 10 done-when criteria are MET. The workspace implements the full
+          anti-abuse and daily-budget-cap layer: bot UA rejection (403), per-IP
+          hourly rate limiting with KV auto-expiry (429), daily spend tracking
+          with expirationTtl >= 24 h (503), garbage-input guard (400), body-size
+          guard (413), model-appropriate pricing (Haiku 1/0.10/5; Sonnet
+          3/0.30/15), and spend writes that swallow errors so KV failures never
+          break the visitor stream. Acceptance tests 7/8/9 run in the Workers
+          pool. pnpm build, typecheck, and test all exit 0 with 180 tests green.
+          Minor observations: no dedicated pricing unit test (GR-ITER-003
+          finding); body-size guard acts on Content-Length header only; TTL
+          comment in spend.ts is misleading (TTL is 2 days from key-date
+          midnight, not 1)."
+    affected_files:
+      - src/worker.ts
+      - src/routes/chat.ts
+      - src/abuse/
+      - src/budget/
+      - src/pricing/
+      - src/__tests__/abuse/
+      - src/__tests__/budget/
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G7
+    strategy_id: STR-da3dac65-e70d-4da6-96f9-5a55549aa405
+    completed_at: 2026-05-15T16:54:47.041Z
+    summary: "Goal G7: Admin / configuration editing behavior (F5) completed."
+    findings:
+      - category: observation
+        text: "All 13 criteria are MET. The follow-up sprint resolved the two issues
+          from the prior review: (1) admin.test.ts Test 9 now captures and
+          asserts the Anthropic request body shape
+          (model/system/messages/max_tokens) in the invalid-API-key scenario;
+          (2) a full Acceptance Test 11 integration block was added that
+          exercises POST /admin/save → KV inspection → POST /chat Anthropic
+          system-field verification. The legacy smoke test failure and the
+          void-chain TypeScript error are also fixed. pnpm build, typecheck, and
+          test all exit 0 with 200 tests passing."
+    affected_files:
+      - src/worker.ts
+      - src/routes/admin.ts
+      - src/auth/
+      - src/__tests__/admin/
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G7
+    strategy_id: STR-da3dac65-e70d-4da6-96f9-5a55549aa405
+    completed_at: 2026-05-15T17:28:22.681Z
+    summary: "Goal G7: Admin / configuration editing behavior (F5) completed."
+    findings:
+      - category: observation
+        text: All 13 criteria are MET. The admin routes (GET /admin, POST /admin/save)
+          are fully implemented with JWT-based identity verification supporting
+          all 5 denial reasons (no_jwt, signature_invalid, email_mismatch,
+          aud_mismatch, team_domain_mismatch). Acceptance Tests 10 and 11 are
+          implemented and passing. Build, typecheck, and test suite all succeed
+          with 200 tests passing across 27 test files.
+    affected_files:
+      - src/worker.ts
+      - src/routes/admin.ts
+      - src/auth/
+      - src/__tests__/admin/
+    baseline_after_goal: goal-completion gate passed (build + tests green)
