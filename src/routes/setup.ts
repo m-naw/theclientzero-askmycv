@@ -42,10 +42,8 @@ function errorResponse(status: number, error: string, field?: string): Response 
 
 interface ParsedFormBody {
   display_name: string;
-  page_title: string;
+  headline: string;
   cv_markdown: string;
-  about_blurb: string;
-  chat_path: string;
   anthropic_api_key: string;
   daily_budget_usd: number;
 }
@@ -140,6 +138,7 @@ export async function handlePostSetup(request: Request, env: Env): Promise<Respo
     const client = new Anthropic(clientOpts);
     await client.messages.create({
       model: "claude-haiku-4-5-20251001",
+      system: 'You are a helpful assistant.',
       max_tokens: 1,
       messages: [{ role: "user", content: "ping" }],
     });
@@ -151,10 +150,8 @@ export async function handlePostSetup(request: Request, env: Env): Promise<Respo
   // ----- 6. persist StoredConfig --------------------------------------
   const config: StoredConfig = {
     display_name: parsed.display_name as string,
-    page_title: parsed.page_title as string,
+    headline: parsed.headline as string,
     cv_markdown: parsed.cv_markdown as string,
-    about_blurb: parsed.about_blurb as string,
-    chat_path: parsed.chat_path as string,
     anthropic_api_key: apiKey,
     daily_budget_usd: parsed.daily_budget_usd as number,
     access_email: identity.email,

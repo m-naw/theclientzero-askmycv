@@ -97,7 +97,7 @@ export async function handleRoot(request: Request, env: Env): Promise<Response> 
       const cfg = parsed.value;
       const props: ChatPageProps = {
         display_name: cfg.display_name,
-        headline: cfg.about_blurb,
+        headline: cfg.headline,
         suggested_questions: DEFAULT_SUGGESTED_QUESTIONS,
       };
       return new Response(renderChatPage(props), { status: 200, headers: HTML_HEADERS });

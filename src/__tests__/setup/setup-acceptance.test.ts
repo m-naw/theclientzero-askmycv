@@ -44,9 +44,7 @@ async function clearKv(): Promise<void> {
 function validFormBody(): URLSearchParams {
   const body = new URLSearchParams();
   body.set("display_name", "Jane Doe");
-  body.set("page_title", "Jane Doe — CV chat");
-  body.set("about_blurb", "Senior backend engineer.");
-  body.set("chat_path", "/");
+  body.set("headline", "Senior backend engineer · Berlin");
   body.set("anthropic_api_key", "sk-ant-test-key");
   body.set("daily_budget_usd", "5");
   // 250+ chars to satisfy MIN
@@ -200,10 +198,8 @@ describe("Setup acceptance tests (spec §12)", () => {
 
     const existing: StoredConfig = {
       display_name: "Existing",
-      page_title: "Existing",
+      headline: "Blurb",
       cv_markdown: "x".repeat(300),
-      about_blurb: "Blurb",
-      chat_path: "/",
       anthropic_api_key: "sk-ant-existing",
       daily_budget_usd: 3,
       access_email: "owner@test",
@@ -314,5 +310,74 @@ describe("Setup acceptance tests (spec §12)", () => {
     // (5) GET / with valid JWT → setup form
     const formHtml = await (await runFetch(rootRequest(jwt))).text();
     expect(formHtml).toContain('name="cv_markdown"');
+  });
+
+  // ---------------------------------------------------------------------
+  // Test 6: Anthropic key rejection
+  // ---------------------------------------------------------------------
+  it("returns 400 when Anthropic rejects the key", async () => {
+    const kp = await createJwtHarness();
+    await getEnv().STATE.put(TEST_JWKS_KV_KEY, JSON.stringify(kp.jwksDocument));
+    const jwt = await mintAccessJwt({
+      privateKey: kp.privateKey,
+      aud: "test-aud-1",
+      iss: "https://test.cloudflareaccess.com",
+      email: "owner@test",
+    });
+
+    // Use a dedicated host so we don't collide with persisted 200 interceptors
+    // from earlier tests on ANTHROPIC_HOST.
+    const rejectHost = "https://anthropic-reject.test";
+    (env as Record<string, string>).ANTHROPIC_BASE_URL = rejectHost;
+    const pool = fetchMock.get(rejectHost);
+    pool
+      .intercept({ path: /\/v1\/messages.*/, method: "POST" })
+      .reply(401, JSON.stringify({ error: { type: "authentication_error" } }), {
+        headers: { "content-type": "application/json" },
+      });
+
+    const res = await runFetch(setupRequest(jwt, validFormBody()));
+    expect(res.status).toBe(400);
+    const json = await res.json() as { field?: string };
+    expect(json.field).toBe("anthropic_api_key");
+    expect(await getEnv().STATE.get("config")).toBeNull();
+  });
+});
+
+describe("POST /setup field validation", () => {
+  beforeEach(async () => {
+    fetchMock.activate();
+    fetchMock.disableNetConnect();
+    try { fetchMock.enableNetConnect(/localhost/); } catch { /* not all versions */ }
+
+    (env as Record<string, string>).ANTHROPIC_BASE_URL = ANTHROPIC_HOST;
+    (env as Record<string, string>).ACCESS_JWKS_URL_OVERRIDE = "";
+    await clearKv();
+  });
+
+  afterEach(async () => {
+    fetchMock.deactivate();
+    await clearKv();
+  });
+
+  it("returns 400 for each missing required field", async () => {
+    const kp = await createJwtHarness();
+    await getEnv().STATE.put(TEST_JWKS_KV_KEY, JSON.stringify(kp.jwksDocument));
+    const jwt = await mintAccessJwt({
+      privateKey: kp.privateKey,
+      aud: "test-aud-1",
+      iss: "https://test.cloudflareaccess.com",
+      email: "owner@test",
+    });
+    mockAnthropicOk();
+    for (const field of ["display_name", "headline", "anthropic_api_key", "cv_markdown"]) {
+      const body = validFormBody();
+      body.delete(field);
+      const res = await runFetch(setupRequest(jwt, body));
+      expect(res.status).toBe(400);
+      const json = await res.json() as { field?: string };
+      expect(json.field).toBe(field);
+      expect(await getEnv().STATE.get("config")).toBeNull();
+    }
   });
 });

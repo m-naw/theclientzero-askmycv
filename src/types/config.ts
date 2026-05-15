@@ -12,14 +12,10 @@
 export interface StoredConfig {
   /** Owner's display name shown on the chat page. Required. */
   display_name: string;
-  /** HTML <title> override for the chat page. Required. */
-  page_title: string;
+  /** Short headline shown on the chat page. Required. */
+  headline: string;
   /** CV content in markdown, 200..50000 chars. Required. */
   cv_markdown: string;
-  /** Short intro / blurb shown above the chat. Required. */
-  about_blurb: string;
-  /** Public chat path (defaults to "/"). Required. */
-  chat_path: string;
   /** Anthropic API key. KV-only; never echoed to HTML or logs. Required. */
   anthropic_api_key: string;
   /** Hard daily Anthropic spend cap, in USD. Required. */
@@ -37,11 +33,9 @@ export interface StoredConfig {
 /** Names of all required fields (used by the setup-form validator). */
 export const REQUIRED_SETUP_FIELDS = [
   "display_name",
-  "page_title",
-  "cv_markdown",
-  "about_blurb",
-  "chat_path",
+  "headline",
   "anthropic_api_key",
+  "cv_markdown",
   "daily_budget_usd",
 ] as const;
 
@@ -67,10 +61,8 @@ export function parseStoredConfig(
   const r = raw as Record<string, unknown>;
   const stringFields = [
     "display_name",
-    "page_title",
+    "headline",
     "cv_markdown",
-    "about_blurb",
-    "chat_path",
     "anthropic_api_key",
     "access_email",
     "access_aud",
