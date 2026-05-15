@@ -1,105 +1,110 @@
 ## Problem Statement
 
-The AskMyCV repository needs a buildable, testable Cloudflare Worker foundation with a Workers-compatible test harness before any feature work (G3+) can begin. The test harness must run inside miniflare so KV semantics, streaming, and Web Crypto behave identically to production.
+Attempt 1 satisfied 11 of 12 done_when criteria. The single failing criterion (criterion 9) requires the JWKS smoke test to route JWT verification **through the Worker itself** using a test-only injection mechanism, without monkey-patching `globalThis.fetch`. The current implementation at `src/test/smoke.test.ts:96-134` does the opposite: it patches `globalThis.fetch` directly and calls `jose.jwtVerify` without ever invoking the Worker, meaning a broken Worker JWT path would go undetected.
 
 ## Current Behavior
 
-The workspace at `/tmp/strategos-workspaces/STR-da3dac65-e70d-4da6-96f9-5a55549aa405/askmycv` already contains a largely-complete implementation committed to the `main` branch:
+`src/test/smoke.test.ts:91-136` — the `"JWKS mock issues verifiable JWTs"` describe block:
+- Lines 96-104: patches `globalThis.fetch = ...` (explicitly prohibited by criterion 9)
+- Lines 118-131: calls `jose.createRemoteJWKSet` and `jose.jwtVerify` directly (bypasses Worker entirely)
+- Result: the Worker's JWT verification code in `src/worker.ts` is never executed; no `/admin`-equivalent route exists in the Worker to verify
 
-- `wrangler.toml` — declares `STATE` KV namespace; has `[vars]` with `ANTHROPIC_BASE_URL=""` and `ACCESS_JWKS_URL_OVERRIDE=""` (URL overrides, not secrets)
-- `package.json` — `build`, `test`, `typecheck`, `lint` scripts; dependencies include `@anthropic-ai/sdk`, `jose`, `@cloudflare/vitest-pool-workers`, `wrangler`, `typescript`; lockfile is `pnpm-lock.yaml`
-- `vitest.config.ts` — uses `defineWorkersConfig` with miniflare bindings for test URL overrides
-- `src/index.ts` — placeholder fetch handler returning 404 for unknown paths
-- `src/env.ts` — `Env` interface with `STATE: KVNamespace` and optional URL override bindings
-- `src/test/harness/anthropic-mock.ts` — `createAnthropicMock()` with SSE event queueing and request recording
-- `src/test/harness/jwks.ts` — `createJwksMock()` with ES256 key generation and controllable claims
-- `src/test/smoke.test.ts` — 3 describe blocks covering KV/ReadableStream/crypto.subtle, Worker boot + Anthropic SSE, and JWKS valid/forged JWT
-- `LICENSE` — AGPL-3.0 (34616 bytes)
-- `cv.example.md` — 2189 chars
-- `README.md` — contains Deploy-to-Cloudflare button and `deploy.workers.cloudflare.com` URL referencing `m-naw/theclientzero-askmycv`
-- `pnpm build` → exit 0; `pnpm test` → 63 tests pass (7 files); `pnpm typecheck` → exit 0
+`src/worker.ts:1-20` — only handles `GET /` (200) and `GET /health` (200); no JWT-verified route exists.
 
-**Known gap:** `package.json` declares `"lint": "eslint src"` but `eslint` is not listed in `devDependencies` and no `eslint.config.*` or `.eslintrc` file exists. GR-VERIFY-007 requires the lint command to succeed without errors.
+`vitest.config.ts:14` — `ACCESS_JWKS_URL_OVERRIDE: ""` binding is declared but never exercised by the Worker.
 
 ## Proposed Changes
 
-### Sprint 1 — Lint fix + structural verification
+### 1. `src/worker.ts` — Add JWT-verified `/admin` route
 
-**Fix lint script.** Add `eslint`, `@typescript-eslint/eslint-plugin`, and `@typescript-eslint/parser` as devDependencies (compatible with existing TypeScript 5.5+). Add a minimal `eslint.config.js` (flat config) with `@typescript-eslint/recommended` rules and `no-console: error`. Run `pnpm install` to update `pnpm-lock.yaml`. Verify `pnpm lint` exits 0.
+Add a route handler for `GET /admin` that:
+- Reads the `CF-Access-JWT-Assertion` header
+- Returns 403 if header is absent
+- Reads the JWKS URL from `env.ACCESS_JWKS_URL_OVERRIDE` (test injection) or falls back to a placeholder production URL
+- Calls `createRemoteJWKSet(new URL(jwksUrl))` and `jwtVerify(jwt, jwks)` from `jose`
+- Returns 200 with `{ email }` on success; 403 on any verification failure
+- Creates `createRemoteJWKSet` per-request to avoid cross-test JWKS cache pollution
 
-Alternatively — simpler — change the lint script to use `tsc --noEmit` and eliminate the eslint dependency entirely. This avoids adding new dependencies but loses style-check coverage. **Recommended: add eslint** since the script already names it and the project will need it for G3+ feature code.
+This route satisfies the hard constraint: `/` and `/chat` remain unauthenticated; only `/admin` is gated.
 
-**Verify structural done_when criteria:**
-- `grep -c 'binding = "STATE"' wrangler.toml` → ≥1
-- `grep -i 'api.key\|sk-ant\|secret\|password' wrangler.toml` → 0 matches
-- `jq -r '.scripts | keys[]' package.json | grep -E '^(build|test|typecheck)$' | wc -l` → 3
-- `test -f pnpm-lock.yaml` → exits 0
-- `head -5 LICENSE | grep -qi agpl` → exits 0
-- `wc -c cv.example.md | awk '$1 >= 500'` → emits output
-- `grep -c 'Deploy to Cloudflare' README.md` → ≥1
-- `grep -c 'deploy.workers.cloudflare.com' README.md` → ≥1
+### 2. `src/test/smoke.test.ts` — Replace JWKS describe block
 
-### Sprint 2 — Test harness verification
+Replace the `"JWKS mock issues verifiable JWTs"` describe block (lines 91-136) with `"JWKS injection wired through Worker /admin route"` that:
+- Imports `fetchMock` from `cloudflare:test` (NOT using `globalThis.fetch = ...`)
+- Calls `fetchMock.activate()` before the test; `fetchMock.deactivate()` in afterEach
+- Sets `(env as Record<string, string>).ACCESS_JWKS_URL_OVERRIDE` to a deterministic test URL (`https://test-access.internal/cdn-cgi/access/certs`)
+- Registers a `fetchMock` interceptor for GET on that URL, returning `JSON.stringify(await jwks.getJwks())`
+- Issues a valid JWT via `jwks.issueJwt({ aud, iss, email })` and a forged JWT via `jwks.issueJwt({ ..., forge: true })`
+- Calls `worker.fetch(new Request("https://example.test/admin", { headers: { "CF-Access-JWT-Assertion": jwt } }), env as never, ctx)` — routing through the actual Worker code
+- Asserts valid JWT → `res.status === 200`
+- Asserts forged JWT → `res.status === 403`
+- Removes the `import { createRemoteJWKSet, jwtVerify } from 'jose'` import (no longer called directly in tests)
 
-**Verify runtime environment criteria:**
-- Run `pnpm test` and confirm exit 0 with ≥1 passing test
-- Confirm `src/test/smoke.test.ts` describe block "Workers runtime primitives inside miniflare" passes (KV `put`/`get` with `expirationTtl`, `ReadableStream` enqueue/read, `crypto.subtle.generateKey`)
-- Confirm describe block "Worker boot + Anthropic SSE mock" passes (Worker returns 404 at GET /, Anthropic mock serializes 4 event types)
-- Confirm describe block "JWKS mock issues verifiable JWTs" passes (valid token verifies, forged token rejects)
-
-**Verify harness exports:**
-- `src/test/harness/anthropic-mock.ts` exports `createAnthropicMock` with `queueResponse`, `receivedRequests`, `fetchHandler`
-- Anthropic mock emits `message_start`, `content_block_delta`, `message_delta`, `message_stop` SSE event types
-- `src/test/harness/jwks.ts` exports `createJwksMock` with `issueJwt({ aud, iss, email, exp, sign })`
-- Worker injection mechanism: `ACCESS_JWKS_URL_OVERRIDE` env binding in `vitest.config.ts` miniflare bindings (no globalThis patching in Worker code)
-
-**Run full verification suite:**
-```
-pnpm build   # exit 0
-pnpm test    # exit 0, ≥1 passing
-pnpm typecheck  # exit 0
-pnpm lint    # exit 0
-```
+**Adversarial guard:** The test must assert on `res.status` returned from `worker.fetch()`, not on the result of any direct `jwtVerify` call. If the Worker's import of `jose` fails or the `/admin` route is missing, the status assertion will fail.
 
 ## Implementation Notes
 
-### Approach selection (brainstorming survivor)
-Approach B (fix-and-verify) was selected over pure verification (A) and reconstruct-from-scratch (C). The implementation is structurally complete; only the lint script lacks its backing tooling. Fixing lint is lower risk than adding eslint to a Workers project because:
-- The Workers TypeScript target is ES2022/ESNext; `@typescript-eslint` handles this cleanly
-- Existing code already uses `tsc --noEmit` for type safety; lint adds style enforcement
-- Re-implementing from scratch would invalidate the existing 63 passing tests
+**fetchMock mechanics:** `fetchMock` from `cloudflare:test` wraps miniflare's outbound fetch interceptor (based on `undici` MockAgent). When the Worker calls `fetch(jwksUrl)` inside the Workers runtime, `fetchMock` intercepts it — no `globalThis.fetch` patching required. This is the documented `@cloudflare/vitest-pool-workers` mechanism.
 
-### Lint gap (CP-flagged, score 0.72)
-Falsifier: `pnpm lint 2>&1; echo $?` — if this emits a non-zero exit, the criterion fails.
-Residual gap: The exact eslint version compatible with `@cloudflare/vitest-pool-workers` v0.5 needs verification. Use eslint v9 flat config (eslint.config.js) which is the default since eslint 9.0.
+**Per-request JWKS client:** `createRemoteJWKSet` caches the JWKS keyset after first fetch. If shared across requests (module-level), the second test (forged JWT) will use the cached keyset and not make a second outbound fetch — meaning the forged test will not trigger the `fetchMock` interceptor. Solve by creating `createRemoteJWKSet` inside the `/admin` handler per-request, or by registering two `fetchMock` interceptors (one per test case).
 
-### JWKS injection mechanism
-The Worker uses `env.ACCESS_JWKS_URL_OVERRIDE` (env binding) to redirect JWKS lookups in tests. This is the correct non-monkey-patching pattern. The smoke test's `globalThis.fetch` patch is in test code only (jose's `createRemoteJWKSet`), not in Worker code.
+**env mutability:** The `env` object from `cloudflare:test` exposes miniflare bindings. String bindings (like `ACCESS_JWKS_URL_OVERRIDE`) can be set on the env object in test context because miniflare passes them as a plain JS object. Cast required: `(env as Record<string, string>).ACCESS_JWKS_URL_OVERRIDE = url`.
 
-### wrangler.toml [vars] block
-The `[vars]` block contains `ANTHROPIC_BASE_URL` and `ACCESS_JWKS_URL_OVERRIDE` with empty-string values. These are URL overrides for testing/development, not secrets. The done_when criterion says "no [vars] block that holds secrets" — these are not secrets. The Anthropic API key is read from KV only (`env.STATE.get('secrets', {type:'json'})`), never from [vars].
+**Approach selection (brainstorm survivor):** Three approaches were evaluated. Approach A (`fetchMock` + `worker.fetch()`) survives because it exercises the real Worker code path without requiring globalThis patching or service binding plumbing. Approaches B and C were rejected: B requires unsupported service binding registration; C bypasses the Worker's production `createRemoteJWKSet` call and cannot detect a broken JWT path.
 
-### Hard constraint compliance
-- Chat routes (GET /, POST /chat) have no auth gates in `src/index.ts`
-- No API key, JWT secret, or credential appears in any tracked file
-- LICENSE is AGPL-3.0
-- Tests run under `@cloudflare/vitest-pool-workers` (miniflare), not bare Node
+**All other criteria (1-8, 10-12):** Confirmed met in attempt 1. The spec does not re-plan these. The executor must verify they remain passing after the criterion-9 fix.
 
 ## Verification Criteria
 
-| Criterion | Verification Command | Expected |
-|---|---|---|
-| STATE KV binding | `grep 'binding = "STATE"' wrangler.toml` | match |
-| No secrets in [vars] | `grep -Ei 'api_key|sk-ant|secret|password' wrangler.toml` | no match |
-| Scripts exist | `jq -r '.scripts|keys[]' package.json` contains build/test/typecheck | 3 lines |
-| LICENSE AGPL | `head -100 LICENSE \| grep -qi agpl` | exit 0 |
-| cv.example.md ≥500 | `wc -c cv.example.md` | ≥500 |
-| README deploy button | `grep -c 'Deploy to Cloudflare' README.md` | ≥1 |
-| README deploy URL | `grep -c 'deploy.workers.cloudflare.com' README.md` | ≥1 |
-| KV/Stream/Crypto in miniflare | smoke.test.ts "Workers runtime primitives" passes | green |
-| Anthropic mock SSE | smoke.test.ts "Anthropic SSE mock" passes | green |
-| JWKS mock injection | smoke.test.ts "JWKS mock issues verifiable JWTs" passes | green |
-| pnpm build | `pnpm build` | exit 0 |
-| pnpm test ≥1 | `pnpm test` | exit 0, ≥1 test |
-| pnpm typecheck | `pnpm typecheck` | exit 0 |
-| pnpm lint | `pnpm lint` | exit 0 |
+### Criterion 1 — wrangler.toml KV binding
+Falsifier: `grep -c 'binding = "STATE"' wrangler.toml` returns 0
+Evidence strength: 0.92 (11/12 met in attempt 1 implicitly includes this)
+
+### Criterion 2 — wrangler.toml no secrets
+Falsifier: `grep -E "ANTHROPIC|JWT_SECRET|^\[vars\]" wrangler.toml` returns nonzero
+Evidence strength: 0.92
+
+### Criterion 3 — package.json scripts and lockfile
+Falsifier: `node -e "const p=require('./package.json'); ['build','test','typecheck'].forEach(s=>{ if(!p.scripts[s]) throw new Error(s) })"` exits nonzero; or `ls pnpm-lock.yaml` exits nonzero
+Evidence strength: 0.92
+
+### Criterion 4 — LICENSE AGPL-3.0
+Falsifier: `head -100 LICENSE | grep -i agpl` returns empty
+Evidence strength: 0.92
+
+### Criterion 5 — cv.example.md ≥ 500 chars
+Falsifier: `wc -c < cv.example.md` prints a number less than 500
+Evidence strength: 0.92
+
+### Criterion 6 — README Deploy button
+Falsifier: `grep -c 'Deploy to Cloudflare' README.md` returns 0; or `grep -c 'deploy.workers.cloudflare.com.*m-naw/theclientzero-askmycv' README.md` returns 0
+Evidence strength: 0.92
+
+### Criterion 7 — Workers-runtime primitives (KV TTL, streaming, crypto.subtle)
+Falsifier: `pnpm test` exits nonzero; or KV TTL test / streaming test / crypto.subtle test reports failure
+Evidence strength: 0.92
+
+### Criterion 8 — Anthropic SSE mock emits four event types
+Falsifier: `pnpm test` exits nonzero; or `"Anthropic mock emits the four required SSE event types"` test reports failure
+Evidence strength: 0.92
+
+### Criterion 9 — JWKS injection via Worker path, no globalThis patching [FLAGGED]
+Falsifier (primary): `grep 'globalThis.fetch' src/test/smoke.test.ts` returns nonzero
+Falsifier (secondary): the JWKS describe block does not call `worker.fetch()` or `SELF.fetch()` → the Worker's JWT verification path is never invoked
+Falsifier (tertiary): `pnpm test` exits nonzero after the fix (integration failure)
+Adversarial guard: assert on HTTP status from Worker response, not on `jwtVerify` result
+Evidence strength pre-fix: 0.1 (confirmed broken in attempt 1)
+Evidence strength post-fix: 0.85 (contingent on `fetchMock` intercepting miniflare outbound fetch correctly — verify by running `pnpm test` and confirming the new describe block passes)
+Residual gap: `fetchMock` from `cloudflare:test` must intercept the Worker's outbound `fetch()` to the JWKS URL inside miniflare. If miniflare's fetch does not route through the `undici` MockAgent that `fetchMock` uses, a secondary interception strategy (registering a custom `outboundService` in `vitest.config.ts`) must be evaluated. The executor must run `pnpm test` and confirm the test passes before declaring done.
+
+### Criterion 10 — `pnpm install && pnpm build` succeeds
+Falsifier: `pnpm build` exits nonzero
+Evidence strength: 0.92
+
+### Criterion 11 — `pnpm test` exits 0 with ≥1 passing smoke test
+Falsifier: `pnpm test` exits nonzero
+Evidence strength: 0.85 (contingent on criterion 9 fix)
+
+### Criterion 12 — `pnpm typecheck` exits 0
+Falsifier: `pnpm typecheck` exits nonzero
+Evidence strength: 0.88 (adding `jose` imports to `worker.ts` must not introduce type errors)
