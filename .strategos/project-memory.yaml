@@ -84,3 +84,24 @@ entries:
       - src/__tests__/setup/
       - src/__tests__/state-machine/
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G4
+    strategy_id: STR-da3dac65-e70d-4da6-96f9-5a55549aa405
+    completed_at: 2026-05-15T14:07:17.166Z
+    summary: "Goal G4: Auth + setup state machine behavior (F2 + F3) completed."
+    findings:
+      - category: observation
+        text: All 13 done-when criteria are MET. The state machine
+          (unconfigured→configured), JWT verification via jose, setup-form
+          rendering, POST /setup field validation, Anthropic test-call, KV
+          persistence with JWT claims, setup window expiry, and recovery path
+          are all correctly implemented and tested. pnpm build/typecheck/test
+          all pass (exit 0) with 76 tests; acceptance scenarios 1-5 from spec.md
+          §12 are covered by src/__tests__/setup/setup-acceptance.test.ts.
+    affected_files:
+      - src/worker.ts
+      - src/routes/
+      - src/auth/
+      - src/state/
+      - src/__tests__/setup/
+      - src/__tests__/state-machine/
+    baseline_after_goal: goal-completion gate passed (build + tests green)
