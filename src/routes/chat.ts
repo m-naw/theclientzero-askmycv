@@ -1,24 +1,35 @@
 /**
- * POST /chat — visitor-facing streaming chat endpoint. Spec §9 F4.
+ * POST /chat — visitor-facing streaming chat endpoint. Spec §9 F4, F6, F7.
  *
  * No authentication: recruiters must never see a login screen.
  *
  * Pipeline:
+ *   0. Anti-abuse guards (before body parsing):
+ *      a. Content-Length > 100 KiB → 413
+ *      b. Bot user-agent → 403
  *   1. Parse JSON body; validate `messages` (non-empty array).
- *   2. Cap to last 12 turns; truncate each content to 1500 chars.
- *   3. Load StoredConfig from KV (config). The Anthropic API key is
+ *   2. Garbage input check (>100 chars, >70% uppercase) → 400.
+ *   3. Per-IP rate limit (CF-Connecting-IP, max_msgs_per_hour) → 429.
+ *   4. Daily budget pre-flight: read spend:<today>; if >= daily_budget_usd → 503.
+ *   5. Cap to last 12 turns; truncate each content to 1500 chars.
+ *   6. Load StoredConfig from KV (config). The Anthropic API key is
  *      read ONLY from KV — never embedded in source or env vars.
- *   4. Build the system prompt (CV verbatim + behavioral instructions).
- *   5. Call Anthropic /v1/messages with stream=true.
- *   6. Bridge the upstream SSE chunks to our visitor as text/event-stream.
- *   7. Best-effort: parse usage from message_start/message_delta and
- *      write spend:<UTC-date> to KV. Failures here must not break the
- *      visitor stream.
+ *   7. Build the system prompt (CV verbatim + behavioral instructions).
+ *   8. Call Anthropic /v1/messages with stream=true.
+ *   9. Bridge the upstream SSE chunks to our visitor as text/event-stream.
+ *  10. Best-effort: parse usage from message_start/message_delta, compute
+ *      cost, and write spend:<UTC-date> to KV (awaited in stream flush). Failures
+ *      here must not break the visitor stream.
  */
 
 import type { Env } from "../env";
-import { parseStoredConfig, type StoredConfig } from "../types/config";
+import { parseStoredConfig, type StoredConfig, DEFAULT_MAX_MSGS_PER_HOUR } from "../types/config";
 import { buildSystemPrompt } from "../prompts/system";
+import { isBotUserAgent } from "../abuse/ua";
+import { isGarbageInput } from "../abuse/input-guard";
+import { checkAndIncrement } from "../abuse/rate-limit";
+import { utcDateKey, readSpend, addSpend } from "../budget/spend";
+import { computeCostUsd } from "../pricing/index";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" } as const;
 const SSE_HEADERS = {
@@ -31,34 +42,18 @@ const MAX_TURNS = 12;
 const MAX_CHARS_PER_MESSAGE = 1500;
 const MAX_OUTPUT_TOKENS = 512;
 const MODEL = "claude-haiku-4-5-20251001";
-
-// Haiku rates per million tokens (USD). Spec §9 F6.
-const INPUT_RATE_USD = 1;
-const CACHED_RATE_USD = 0.1;
-const OUTPUT_RATE_USD = 5;
-
-const SPEND_TTL_SECONDS = 60 * 60 * 30; // 30 hours — strictly > 24h.
+const MAX_BODY_BYTES = 100 * 1024; // 100 KiB
 
 interface IncomingMessage {
   role: string;
   content: string;
 }
 
-function errorJson(status: number, error: string): Response {
-  return new Response(JSON.stringify({ error }), { status, headers: JSON_HEADERS });
-}
-
-function todayUtcDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function costUsd(inputTokens: number, cachedTokens: number, outputTokens: number): number {
-  return (
-    (inputTokens * INPUT_RATE_USD +
-      cachedTokens * CACHED_RATE_USD +
-      outputTokens * OUTPUT_RATE_USD) /
-    1_000_000
-  );
+function errorJson(status: number, error: string, extraHeaders?: Record<string, string>): Response {
+  return new Response(JSON.stringify({ error }), {
+    status,
+    headers: { ...JSON_HEADERS, ...extraHeaders },
+  });
 }
 
 async function readConfig(env: Env): Promise<StoredConfig | null> {
@@ -72,7 +67,27 @@ async function readConfig(env: Env): Promise<StoredConfig | null> {
   }
 }
 
+/** Seconds until next UTC midnight from now. */
+function secondsUntilMidnight(): number {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const nextMidnight = new Date(`${today}T00:00:00Z`).getTime() + 24 * 60 * 60 * 1000;
+  return Math.max(1, Math.ceil((nextMidnight - now.getTime()) / 1000));
+}
+
 export async function handlePostChat(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  // ----- 0a. Content-Length guard (spec §9 F7) -----------------------
+  const contentLength = request.headers.get("content-length");
+  if (contentLength !== null && Number(contentLength) > MAX_BODY_BYTES) {
+    return errorJson(413, "request body too large");
+  }
+
+  // ----- 0b. Bot user-agent check (spec §9 F7) -----------------------
+  const ua = request.headers.get("user-agent");
+  if (isBotUserAgent(ua)) {
+    return errorJson(403, "forbidden: automated clients not allowed");
+  }
+
   // ----- 1. body parsing + validation -------------------------------
   let parsed: unknown;
   try {
@@ -88,24 +103,43 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
     return errorJson(400, "messages must be a non-empty array");
   }
 
-  // ----- 2. clamp turns + truncate content --------------------------
   const rawMessages = body.messages as unknown[];
 
-  // Reject garbage input: messages where >100 chars and >70% are uppercase
-  // letters indicate bot/spam. Check the last (most recent) user message.
-  // Spec §9 F4 done_when.
+  // ----- 2. Garbage input check (spec §9 F7 / F4) -------------------
   for (const m of rawMessages) {
     const obj = (m ?? {}) as { content?: unknown };
     const content = typeof obj.content === "string" ? obj.content : "";
-    if (content.length > 100) {
-      const letters = content.replace(/[^a-zA-Z]/g, "");
-      const upperCount = letters.replace(/[^A-Z]/g, "").length;
-      if (letters.length > 0 && upperCount / letters.length > 0.7) {
-        return errorJson(400, "message rejected: excessive uppercase characters");
-      }
+    if (isGarbageInput(content)) {
+      return errorJson(400, "message rejected: excessive uppercase characters");
     }
   }
 
+  // ----- 3. load config (key is KV-only) ----------------------------
+  const cfg = await readConfig(env);
+  if (cfg === null) {
+    return errorJson(503, "not configured");
+  }
+
+  // ----- 4. Per-IP rate limit (spec §9 F7) --------------------------
+  const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
+  const limit = cfg.max_msgs_per_hour ?? DEFAULT_MAX_MSGS_PER_HOUR;
+  const { allowed } = await checkAndIncrement(env.STATE, ip, limit, new Date());
+  if (!allowed) {
+    return errorJson(429, "rate limit exceeded", {
+      "retry-after": String(secondsUntilMidnight()),
+    });
+  }
+
+  // ----- 5. Daily budget pre-flight (spec §9 F6) --------------------
+  const spendKey = utcDateKey(new Date());
+  const currentSpend = await readSpend(env.STATE, spendKey);
+  if (currentSpend >= cfg.daily_budget_usd) {
+    return errorJson(503, "daily budget exceeded", {
+      "retry-after": String(secondsUntilMidnight()),
+    });
+  }
+
+  // ----- 6. clamp turns + truncate content --------------------------
   const trimmed = rawMessages.slice(-MAX_TURNS).map((m): IncomingMessage => {
     const obj = (m ?? {}) as { role?: unknown; content?: unknown };
     const role = typeof obj.role === "string" ? obj.role : "user";
@@ -116,16 +150,10 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
     };
   });
 
-  // ----- 3. load config (key is KV-only) ----------------------------
-  const cfg = await readConfig(env);
-  if (cfg === null) {
-    return errorJson(503, "not configured");
-  }
-
-  // ----- 4. build system prompt -------------------------------------
+  // ----- 7. build system prompt -------------------------------------
   const system = buildSystemPrompt(cfg.cv_markdown);
 
-  // ----- 5. call Anthropic streaming --------------------------------
+  // ----- 8. call Anthropic streaming --------------------------------
   const baseUrl =
     env.ANTHROPIC_BASE_URL && env.ANTHROPIC_BASE_URL.length > 0
       ? env.ANTHROPIC_BASE_URL
@@ -156,7 +184,7 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
     );
   }
 
-  // ----- 6/7. bridge SSE + track usage ------------------------------
+  // ----- 9/10. bridge SSE + track usage (spec §9 F6) ----------------
   const usage = { input: 0, cached: 0, output: 0 };
 
   const transform = new TransformStream<Uint8Array, Uint8Array>({
@@ -197,12 +225,16 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
     },
     async flush() {
       // After the upstream stream completes, persist spend best-effort.
+      // Use await so the TransformStream infrastructure keeps the execution context
+      // alive until the KV write completes. Failures are swallowed.
       try {
-        const key = `spend:${todayUtcDate()}`;
-        const current = await env.STATE.get(key);
-        const prev = current === null ? 0 : Number(current);
-        const next = (Number.isFinite(prev) ? prev : 0) + costUsd(usage.input, usage.cached, usage.output);
-        await env.STATE.put(key, String(next), { expirationTtl: SPEND_TTL_SECONDS });
+        const cost = computeCostUsd({
+          model: MODEL,
+          inputTokens: usage.input,
+          cachedInputTokens: usage.cached,
+          outputTokens: usage.output,
+        });
+        await addSpend(env.STATE, spendKey, cost);
       } catch {
         /* swallow — visitor stream already delivered */
       }
