@@ -31,3 +31,31 @@ entries:
       - README.md
       - docs/
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G3
+    strategy_id: STR-da3dac65-e70d-4da6-96f9-5a55549aa405
+    completed_at: 2026-05-15T12:04:14.299Z
+    summary: "Goal G3: UI/UX foundation — design system & view templates completed
+      (holistic)."
+    findings:
+      - category: observation
+        text: "All 10 done-when criteria for G3 are MET. The workspace contains a
+          complete design-system layer: design-tokens.ts as the sole literal
+          sink, four typed view templates (chat-page, setup-instructions,
+          setup-form, admin-form), a comprehensive error/expired/denied page
+          family, client-side sprinkles (streaming.ts, polling.ts), and six test
+          files covering every surface. Build, typecheck, and 44 tests all pass.
+          Note: strategos:strategos-target-repo-conventions skill was
+          unavailable; review proceeded in read-only judicial mode with no git
+          operations performed."
+    affected_files:
+      - src/views/
+      - src/views/chat-page.ts
+      - src/views/setup-instructions.ts
+      - src/views/setup-form.ts
+      - src/views/admin-form.ts
+      - src/views/error-pages.ts
+      - src/views/design-tokens.ts
+      - src/views/primitives/
+      - src/views/client/streaming.ts
+      - src/__tests__/views/
+    baseline_after_goal: goal-completion gate passed (build + tests green)
