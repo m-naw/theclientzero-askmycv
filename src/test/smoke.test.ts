@@ -5,6 +5,7 @@ import worker from "../worker";
 import { createAnthropicMock } from "./harness/anthropic-mock";
 import { createJwksMock } from "./harness/jwks-mock";
 import { putJson, getJson } from "./harness/kv";
+import { TEST_JWKS_KV_KEY } from "../routes/jwks-source";
 
 describe("Workers runtime primitives inside miniflare", () => {
   it("KV.put honours expirationTtl", async () => {
@@ -96,23 +97,30 @@ describe("JWKS injection wired through Worker /admin route", () => {
     (env as Record<string, string>).ACCESS_JWKS_URL_OVERRIDE = jwksUrl;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     fetchMock.deactivate();
+    const kv = (env as { STATE: KVNamespace }).STATE;
+    await kv.delete("config");
+    await kv.delete(TEST_JWKS_KV_KEY);
   });
 
   it("Worker /admin accepts a valid JWT and rejects a forged one", async () => {
     const jwks = await createJwksMock();
-    const jwksBody = JSON.stringify(await jwks.getJwks());
 
-    // Two interceptors: createRemoteJWKSet is created per-request in
-    // handleAdmin, so each /admin call performs its own JWKS fetch.
-    const pool = fetchMock.get("https://test-access.internal");
-    pool
-      .intercept({ path: "/cdn-cgi/access/certs", method: "GET" })
-      .reply(200, jwksBody, { headers: { "content-type": "application/json" } });
-    pool
-      .intercept({ path: "/cdn-cgi/access/certs", method: "GET" })
-      .reply(200, jwksBody, { headers: { "content-type": "application/json" } });
+    // Seed KV: full StoredConfig + JWKS document (KV-based auth path)
+    const kv = (env as { STATE: KVNamespace }).STATE;
+    await kv.put("config", JSON.stringify({
+      display_name: "Test Owner",
+      headline: "Test headline",
+      cv_markdown: "# Test CV\n\nSome content.",
+      anthropic_api_key: "sk-ant-smoke-key",
+      daily_budget_usd: 5,
+      access_email: "owner@example.com",
+      access_aud: "aud-123",
+      access_team_domain: "team.cloudflareaccess.com",
+      setup_timestamp: Date.now() - 10000,
+    }));
+    await kv.put(TEST_JWKS_KV_KEY, JSON.stringify(await jwks.getJwks()));
 
     const validJwt = await jwks.issueJwt({
       aud: "aud-123",
@@ -136,8 +144,8 @@ describe("JWKS injection wired through Worker /admin route", () => {
     );
     await waitOnExecutionContext(ctxA);
     expect(validRes.status).toBe(200);
-    const validBody = (await validRes.json()) as { email: string };
-    expect(validBody.email).toBe("owner@example.com");
+    const validHtml = await validRes.text();
+    expect(validHtml).toContain('name="cv_markdown"');
 
     const ctxB = createExecutionContext();
     const forgedRes = await worker.fetch(

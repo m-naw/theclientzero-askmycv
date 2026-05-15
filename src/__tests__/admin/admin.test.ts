@@ -19,6 +19,23 @@ import { createJwtHarness, mintAccessJwt } from "../../test-utils/jwt-harness";
 import { TEST_JWKS_KV_KEY } from "../../routes/jwks-source";
 import type { StoredConfig } from "../../types/config";
 
+function fakeAnthropicSse(): string {
+  return [
+    `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "m1", usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n`,
+    `event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Hi" } })}\n\n`,
+    `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 1 } })}\n\n`,
+    `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`,
+  ].join("");
+}
+
+async function drainStream(res: Response): Promise<void> {
+  const reader = res.body!.getReader();
+  for (;;) {
+    const { done } = await reader.read();
+    if (done) break;
+  }
+}
+
 const ANTHROPIC_HOST = "https://anthropic-mock-admin.test";
 
 interface TestEnv {
@@ -244,7 +261,8 @@ describe("GET /admin", () => {
     expect(html).toContain(cfg.headline);
     // API key must never appear in the HTML
     expect(html).not.toContain("sk-ant-existing-key");
-    expect(html).not.toContain("anthropic_api_key".replace("_", "")).not.toContain("sk-ant");
+    expect(html).not.toContain("anthropicapi_key");
+    expect(html).not.toContain("sk-ant");
   });
 });
 
@@ -324,14 +342,18 @@ describe("POST /admin/save", () => {
     await seedConfig(cfg);
 
     (env as Record<string, string>).ANTHROPIC_BASE_URL = rejectHost;
+    let capturedReqBody: Record<string, unknown> | null = null;
     fetchMock
       .get(rejectHost)
       .intercept({ path: /\/v1\/messages.*/, method: "POST" })
-      .reply(
-        401,
-        JSON.stringify({ error: { type: "authentication_error" } }),
-        { headers: { "content-type": "application/json" } },
-      );
+      .reply((opts: { body?: string }) => {
+        try { capturedReqBody = JSON.parse(opts.body ?? "{}"); } catch { /* */ }
+        return {
+          statusCode: 401,
+          data: JSON.stringify({ error: { type: "authentication_error" } }),
+          responseOptions: { headers: { "content-type": "application/json" } },
+        };
+      });
 
     const jwt = await mintAccessJwt({
       privateKey: kp.privateKey,
@@ -349,6 +371,13 @@ describe("POST /admin/save", () => {
     // Config unchanged
     const stored = JSON.parse((await getEnv().STATE.get("config")) as string) as StoredConfig;
     expect(stored.anthropic_api_key).toBe("sk-ant-existing-key");
+
+    // Verify outgoing Anthropic test-call body shape (spec §9 F5)
+    expect(capturedReqBody).not.toBeNull();
+    expect(capturedReqBody).toHaveProperty("model");
+    expect(capturedReqBody).toHaveProperty("system");
+    expect(capturedReqBody).toHaveProperty("messages");
+    expect(capturedReqBody).toHaveProperty("max_tokens");
   });
 
   // Test 10: no JWT on POST → 403 denial HTML
@@ -441,5 +470,159 @@ describe("POST /admin/save", () => {
     const r5 = await runFetch(adminGetRequest(wrongEmail));
     expect(r5.status).toBe(403);
     expect(await r5.text()).toContain("email_mismatch");
+  });
+});
+
+describe("Acceptance Test 10: Admin requires matching identity (spec §12 Test 10)", () => {
+  const AT10_HOST = "https://anthropic-mock-at10.test";
+
+  beforeEach(async () => {
+    fetchMock.activate();
+    fetchMock.disableNetConnect();
+    try { fetchMock.enableNetConnect(/localhost/); } catch { /* */ }
+    (env as Record<string, string>).ANTHROPIC_BASE_URL = AT10_HOST;
+    (env as Record<string, string>).ACCESS_JWKS_URL_OVERRIDE = "";
+    await clearKv();
+  });
+
+  afterEach(async () => {
+    fetchMock.deactivate();
+    await clearKv();
+  });
+
+  it("runs all 5 spec §12 acceptance steps in sequence", async () => {
+    const kp = await createJwtHarness();
+    await getEnv().STATE.put(TEST_JWKS_KV_KEY, JSON.stringify(kp.jwksDocument));
+    const cfg = baseConfig({
+      access_email: "owner@test",
+      access_aud: "test-aud-1",
+      access_team_domain: "test.cloudflareaccess.com",
+    });
+    await seedConfig(cfg);
+
+    // Step 1: no JWT → 403
+    const res1 = await runFetch(adminGetRequest(null));
+    expect(res1.status).toBe(403);
+
+    // Step 2: wrong email → 403 body contains 'email'
+    const jwtWrongEmail = await mintAccessJwt({
+      privateKey: kp.privateKey,
+      aud: "test-aud-1",
+      iss: "https://test.cloudflareaccess.com",
+      email: "attacker@test",
+    });
+    const res2 = await runFetch(adminGetRequest(jwtWrongEmail));
+    expect(res2.status).toBe(403);
+    expect(await res2.text()).toContain("email");
+
+    // Step 3: wrong aud → 403 body contains 'aud'
+    const jwtWrongAud = await mintAccessJwt({
+      privateKey: kp.privateKey,
+      aud: "different-aud",
+      iss: "https://test.cloudflareaccess.com",
+      email: "owner@test",
+    });
+    const res3 = await runFetch(adminGetRequest(jwtWrongAud));
+    expect(res3.status).toBe(403);
+    expect(await res3.text()).toContain("aud");
+
+    // Step 4: wrong iss → 403
+    const jwtWrongIss = await mintAccessJwt({
+      privateKey: kp.privateKey,
+      aud: "test-aud-1",
+      iss: "https://other.cloudflareaccess.com",
+      email: "owner@test",
+    });
+    const res4 = await runFetch(adminGetRequest(jwtWrongIss));
+    expect(res4.status).toBe(403);
+
+    // Step 5: fully matching JWT → 200 HTML with pre-filled fields
+    const jwtValid = await mintAccessJwt({
+      privateKey: kp.privateKey,
+      aud: "test-aud-1",
+      iss: "https://test.cloudflareaccess.com",
+      email: "owner@test",
+    });
+    const res5 = await runFetch(adminGetRequest(jwtValid));
+    expect(res5.status).toBe(200);
+    const html5 = await res5.text();
+    expect(html5).toContain("input");
+    expect(html5).toContain(cfg.display_name);
+  });
+});
+
+describe("Acceptance Test 11: Admin edit reflects in chat (spec §12 Test 11)", () => {
+  const AT11_HOST = "https://anthropic-mock-at11.test";
+  const OLD_CV = "# Old CV content\n\n" + "This is the old content from before. ".repeat(6);
+  const NEW_CV = "# Brand new role at Acme\n\n" + "Working at Acme Corp on exciting projects. ".repeat(5);
+
+  beforeEach(async () => {
+    fetchMock.activate();
+    fetchMock.disableNetConnect();
+    try { fetchMock.enableNetConnect(/localhost/); } catch { /* */ }
+    (env as Record<string, string>).ANTHROPIC_BASE_URL = AT11_HOST;
+    (env as Record<string, string>).ACCESS_JWKS_URL_OVERRIDE = "";
+    await clearKv();
+  });
+
+  afterEach(async () => {
+    fetchMock.deactivate();
+    await clearKv();
+  });
+
+  it("runs all 3 spec §12 acceptance steps in sequence", async () => {
+    const kp = await createJwtHarness();
+    await getEnv().STATE.put(TEST_JWKS_KV_KEY, JSON.stringify(kp.jwksDocument));
+    const cfg = baseConfig({ cv_markdown: OLD_CV });
+    await seedConfig(cfg);
+
+    // Step 1: POST /admin/save with new cv_markdown → 200
+    const jwt = await mintAccessJwt({
+      privateKey: kp.privateKey,
+      aud: cfg.access_aud,
+      iss: `https://${cfg.access_team_domain}`,
+      email: cfg.access_email,
+    });
+    const saveBody = validSaveBody({ cv_markdown: NEW_CV });
+    const saveRes = await runFetch(adminSaveRequest(jwt, saveBody));
+    expect(saveRes.status).toBe(200);
+
+    // Step 2: Inspect KV — config.cv_markdown is updated
+    const storedRaw = await getEnv().STATE.get("config");
+    const stored = JSON.parse(storedRaw as string) as StoredConfig;
+    expect(stored.cv_markdown).toBe(NEW_CV);
+
+    // Step 3: POST /chat — Anthropic request system field contains new CV, not old
+    const captured: { body: Record<string, unknown> | null } = { body: null };
+    fetchMock
+      .get(AT11_HOST)
+      .intercept({ path: /\/v1\/messages.*/, method: "POST" })
+      .reply((opts: { body?: string }) => {
+        try { captured.body = JSON.parse(opts.body ?? "{}"); } catch { /* */ }
+        return {
+          statusCode: 200,
+          data: fakeAnthropicSse(),
+          responseOptions: { headers: { "content-type": "text/event-stream" } },
+        };
+      });
+
+    const chatRes = await runFetch(new Request("https://example.test/chat", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "user-agent": "Mozilla/5.0 (compatible)",
+      },
+      body: JSON.stringify({ messages: [{ role: "user", content: "Tell me about your current role" }] }),
+    }));
+    await drainStream(chatRes);
+
+    expect(captured.body).not.toBeNull();
+    // system is an array of {type, text} blocks — join text fields for assertion
+    const systemBlocks = captured.body?.system as Array<{ type: string; text: string }> | string | undefined;
+    const systemText = Array.isArray(systemBlocks)
+      ? systemBlocks.map((b) => b.text).join("\n")
+      : (systemBlocks ?? "");
+    expect(systemText).toContain("Brand new role at Acme");
+    expect(systemText).not.toContain("old content from before");
   });
 });
