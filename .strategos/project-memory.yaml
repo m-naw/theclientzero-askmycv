@@ -1,0 +1,33 @@
+# .strategos/project-memory.yaml
+# v3.5 iter2: persistent cross-goal + cross-run memory
+# Append-only. Each entry is a goal-completion event.
+
+entries:
+  - goal_id: G2
+    strategy_id: STR-da3dac65-e70d-4da6-96f9-5a55549aa405
+    completed_at: 2026-05-15T11:54:43.099Z
+    summary: "Goal G2: Project foundation & Workers-grade test harness completed
+      (holistic)."
+    findings:
+      - category: observation
+        text: "All 12 done-when criteria are MET. The workspace contains a complete,
+          buildable, testable Workers foundation: wrangler.toml with STATE KV
+          binding (no secrets), package.json with correct scripts, AGPL-3.0
+          LICENSE, cv.example.md (2916 chars), README with Deploy-to-Cloudflare
+          button pointing at m-naw/theclientzero-askmycv, test harness at
+          src/test/harness/ with Anthropic mock (correct SSE contract) and JWKS
+          mock (env-injection, no globals), and pnpm build/test/typecheck all
+          pass with exit 0 (8 smoke tests green inside miniflare)."
+    affected_files:
+      - package.json
+      - pnpm-lock.yaml
+      - wrangler.toml
+      - tsconfig.json
+      - src/worker.ts
+      - src/test-harness/
+      - vitest.config.ts
+      - LICENSE
+      - cv.example.md
+      - README.md
+      - docs/
+    baseline_after_goal: goal-completion gate passed (build + tests green)
