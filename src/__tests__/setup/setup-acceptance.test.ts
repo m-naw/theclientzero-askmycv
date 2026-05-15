@@ -334,7 +334,7 @@ describe("Setup acceptance tests (spec §12)", () => {
     let capturedBody: string | undefined;
     pool
       .intercept({ path: /\/v1\/messages.*/, method: "POST" })
-      .reply((opts) => {
+      .reply((opts: { body?: unknown }) => {
         capturedBody = typeof opts.body === "string" ? opts.body : undefined;
         return {
           statusCode: 401,
