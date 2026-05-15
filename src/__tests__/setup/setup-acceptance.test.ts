@@ -330,10 +330,17 @@ describe("Setup acceptance tests (spec §12)", () => {
     const rejectHost = "https://anthropic-reject.test";
     (env as Record<string, string>).ANTHROPIC_BASE_URL = rejectHost;
     const pool = fetchMock.get(rejectHost);
+
+    let capturedBody: string | undefined;
     pool
       .intercept({ path: /\/v1\/messages.*/, method: "POST" })
-      .reply(401, JSON.stringify({ error: { type: "authentication_error" } }), {
-        headers: { "content-type": "application/json" },
+      .reply((opts) => {
+        capturedBody = typeof opts.body === "string" ? opts.body : undefined;
+        return {
+          statusCode: 401,
+          data: JSON.stringify({ error: { type: "authentication_error" } }),
+          responseOptions: { headers: { "content-type": "application/json" } },
+        };
       });
 
     const res = await runFetch(setupRequest(jwt, validFormBody()));
@@ -341,6 +348,14 @@ describe("Setup acceptance tests (spec §12)", () => {
     const json = await res.json() as { field?: string };
     expect(json.field).toBe("anthropic_api_key");
     expect(await getEnv().STATE.get("config")).toBeNull();
+
+    // Assert the outbound request body shape sent to Anthropic.
+    expect(capturedBody).toBeDefined();
+    const outbound = JSON.parse(capturedBody as string) as Record<string, unknown>;
+    expect(typeof outbound.model).toBe("string");
+    expect(typeof outbound.system).toBe("string");
+    expect(Array.isArray(outbound.messages)).toBe(true);
+    expect(typeof outbound.max_tokens).toBe("number");
   });
 });
 
@@ -360,6 +375,27 @@ describe("POST /setup field validation", () => {
     await clearKv();
   });
 
+  it("returns 400 for non-numeric and non-positive daily_budget_usd", async () => {
+    const kp = await createJwtHarness();
+    await getEnv().STATE.put(TEST_JWKS_KV_KEY, JSON.stringify(kp.jwksDocument));
+    const jwt = await mintAccessJwt({
+      privateKey: kp.privateKey,
+      aud: "test-aud-1",
+      iss: "https://test.cloudflareaccess.com",
+      email: "owner@test",
+    });
+    mockAnthropicOk();
+    for (const badValue of ["not-a-number", "0", "-5"]) {
+      const body = validFormBody();
+      body.set("daily_budget_usd", badValue);
+      const res = await runFetch(setupRequest(jwt, body));
+      expect(res.status).toBe(400);
+      const json = await res.json() as { field?: string };
+      expect(json.field).toBe("daily_budget_usd");
+      expect(await getEnv().STATE.get("config")).toBeNull();
+    }
+  });
+
   it("returns 400 for each missing required field", async () => {
     const kp = await createJwtHarness();
     await getEnv().STATE.put(TEST_JWKS_KV_KEY, JSON.stringify(kp.jwksDocument));
@@ -370,7 +406,7 @@ describe("POST /setup field validation", () => {
       email: "owner@test",
     });
     mockAnthropicOk();
-    for (const field of ["display_name", "headline", "anthropic_api_key", "cv_markdown"]) {
+    for (const field of ["display_name", "headline", "anthropic_api_key", "cv_markdown", "daily_budget_usd"]) {
       const body = validFormBody();
       body.delete(field);
       const res = await runFetch(setupRequest(jwt, body));
