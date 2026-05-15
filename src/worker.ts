@@ -11,6 +11,7 @@
 
 import { handleRoot } from "./routes/index";
 import { handlePostSetup } from "./routes/setup";
+import { handlePostChat } from "./routes/chat";
 import { resolveJwksSource } from "./routes/jwks-source";
 import { verifyAccessJwt } from "./auth/access";
 import type { Env } from "./env";
@@ -51,6 +52,10 @@ export default {
 
     if (url.pathname === "/setup" && request.method === "POST") {
       return handlePostSetup(request, env);
+    }
+
+    if (url.pathname === "/chat" && request.method === "POST") {
+      return handlePostChat(request, env);
     }
 
     if (url.pathname === "/health" && request.method === "GET") {
