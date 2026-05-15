@@ -152,3 +152,24 @@ entries:
       - src/__tests__/abuse/
       - src/__tests__/budget/
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G7
+    strategy_id: STR-da3dac65-e70d-4da6-96f9-5a55549aa405
+    completed_at: 2026-05-15T16:54:47.041Z
+    summary: "Goal G7: Admin / configuration editing behavior (F5) completed."
+    findings:
+      - category: observation
+        text: "All 13 criteria are MET. The follow-up sprint resolved the two issues
+          from the prior review: (1) admin.test.ts Test 9 now captures and
+          asserts the Anthropic request body shape
+          (model/system/messages/max_tokens) in the invalid-API-key scenario;
+          (2) a full Acceptance Test 11 integration block was added that
+          exercises POST /admin/save → KV inspection → POST /chat Anthropic
+          system-field verification. The legacy smoke test failure and the
+          void-chain TypeScript error are also fixed. pnpm build, typecheck, and
+          test all exit 0 with 200 tests passing."
+    affected_files:
+      - src/worker.ts
+      - src/routes/admin.ts
+      - src/auth/
+      - src/__tests__/admin/
+    baseline_after_goal: goal-completion gate passed (build + tests green)
