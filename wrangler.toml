@@ -1,0 +1,22 @@
+name = "askmycv"
+main = "src/worker.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# AskMyCV uses a single KV namespace (STATE) as its only persistence layer.
+# All owner config, secrets (Anthropic key), per-day spend counters, and
+# per-IP rate-limit buckets live under env.STATE.
+#
+# The id below is a placeholder for the Deploy-to-Cloudflare flow; on
+# self-hosted deploys it is replaced with a fresh namespace id.
+[[kv_namespaces]]
+binding = "STATE"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# URL overrides used only in tests and local dev to point JWKS / Anthropic
+# at the in-process mock fetch handlers. They are intentionally empty in
+# this committed file — production reads the Anthropic API key from KV
+# (env.STATE.get('secrets')), never from [vars].
+[vars]
+ANTHROPIC_BASE_URL = ""
+ACCESS_JWKS_URL_OVERRIDE = ""

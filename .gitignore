@@ -1,0 +1,7 @@
+.claude/settings.local.json
+.claude/skill-invocations.jsonl
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.log

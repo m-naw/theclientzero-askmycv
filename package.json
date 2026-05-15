@@ -1,0 +1,33 @@
+{
+  "name": "askmycv",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted, BYOK Cloudflare Worker that lets visitors chat with your CV.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir=dist",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.ts\"",
+    "dev": "wrangler dev"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.40.1",
+    "jose": "^5.9.6"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.5.40",
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.2",
+    "@typescript-eslint/parser": "^8.18.2",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "vitest": "~2.1.9",
+    "wrangler": "^3.99.0"
+  }
+}
