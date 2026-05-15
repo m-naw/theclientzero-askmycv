@@ -1,73 +1,78 @@
 ## Problem Statement
 
-GET /admin and POST /admin/save are either missing or stub-only. The existing `handleAdmin` stub (worker.ts:21-43) returns JSON with only the JWT email — it never reads KV config, never performs identity comparison, and never renders the admin-form HTML. POST /admin/save has no handler at all. This goal wires both routes to their full behavior: strict identity verification against the KV-stored identity, HTML rendering of the admin-form template, and KV config update with optional Anthropic key rotation.
+The admin routes are implemented and tested, but the iteration evaluator reported iteration_failure after two sprints completed (both with totalFailed=0). The exact failure mode is not determinable from static analysis. Attempt 2 must explicitly run `pnpm build`, `pnpm typecheck`, and `pnpm test`, diagnose any failures, and fix them to achieve green CI with all 13 done_when criteria covered.
 
 ## Current Behavior
 
-- `GET /admin`: dispatched to `handleAdmin` in `worker.ts:21-43`. Returns `{"email": "..."}` JSON on valid JWT; error JSON on failure. Never reads KV config. Never checks identity match. Never renders HTML.
-- `POST /admin/save`: falls through to 404 — no handler registered in worker.ts.
-- `src/routes/admin.ts`: does not exist.
-- All view infrastructure is ready: `renderAdminForm` in `src/views/admin-form.ts`, `renderAccessDenied` in `src/views/error-pages.ts` with all five `AccessDenialReason` values.
-- JWT harness is ready: `mintAccessJwt` + `createJwtHarness` in `src/test-utils/jwt-harness.ts`.
+**Implemented and structurally correct (verified by reading workspace files):**
+- `src/routes/admin.ts` — `handleAdminGet` (5-check identity gate → renderAdminForm) and `handleAdminSave` (identity gate → form parse → optional Anthropic key validation → KV merge)
+- `src/auth/identity.ts` — `verifyOwnerIdentity` returning discriminated union with all 5 denial reasons (no_jwt, signature_invalid, team_domain_mismatch, aud_mismatch, email_mismatch) in correct order
+- `src/worker.ts` — dispatches GET /admin → handleAdminGet and POST /admin/save → handleAdminSave; old JSON stub removed
+- `src/__tests__/admin/admin.test.ts` — GET/admin Tests 1-6, POST/admin/save Tests 7-12, AT10 (lines 476-551), AT11 (lines 554-628); 14 tests total
+- `src/test/admin.test.ts` — GET/admin 5-test subset added in sprint-1
+- `src/test/smoke.test.ts` — updated by followup sprint: seeds config + JWKS in KV, checks HTML 200 with 'name="cv_markdown"'
+
+**Unknown:** Whether `pnpm build`, `pnpm typecheck`, and `pnpm test` currently exit 0. The iteration_failure after sprint completion means at least one of these is failing at evaluation time.
 
 ## Proposed Changes
 
-### 1. Create `src/routes/admin.ts`
+**Sprint: Verify + Fix to green CI.**
 
-Exports two handlers and a shared identity guard:
+The sprint executor must:
 
-**`checkAdminIdentity(token, env)`** — async helper returning `{ ok: true, identity, config }` or `{ ok: false, response: Response }`. Called by both handlers to ensure identical identity-check logic.
+1. Run `pnpm build` and fix any compilation errors.
 
-- If token absent → `{ ok: false, response: 403 HTML renderAccessDenied({ reason: "no_jwt" }) }`
-- If `verifyAccessJwt` throws → `{ ok: false, response: 403 HTML renderAccessDenied({ reason: "signature_invalid" }) }`
-- Read + parse config from KV.
-- Compare `identity.team_domain` vs `config.access_team_domain` → `team_domain_mismatch`.
-- Compare `identity.aud` vs `config.access_aud` → `aud_mismatch`.
-- Compare `identity.email` vs `config.access_email` → `email_mismatch`.
-- On full match → `{ ok: true, identity, config }`.
+2. Run `pnpm typecheck` and fix any TypeScript errors. Key risk areas:
+   - `src/__tests__/admin/admin.test.ts` uses `opts: { body?: string }` callback pattern — same as adjacent test files; confirm accepted or update.
+   - Import paths in `src/test/admin.test.ts` — confirm `../routes/jwks-source` and `../test-utils/jwt-harness` resolve correctly.
 
-**`handleGetAdmin(request, env, _ctx)`** — calls `checkAdminIdentity`; on failure returns its response; on success returns 200 HTML `renderAdminForm({ prefill: cfg, email: identity.email })`.
+3. Run `pnpm test` and fix any failing tests. Key risk areas:
+   - **AT11 KV isolation**: AT11 calls POST /chat which writes `spend:<date>` to KV; `clearKv()` only deletes config/setup_window_start/__test_jwks — spend accumulation from prior chat-abuse tests could cause AT11's POST /chat to return 503 if total spend >= daily_budget_usd. Fix: add spend-key deletion to AT11's beforeEach/afterEach or to a shared clearKv helper.
+   - **Criterion 8 gap**: No test explicitly asserts the new headline value appears in KV after POST /admin/save. Test 7 checks anthropic_api_key preserved but not headline updated. Add: `expect(stored.headline).toBe("Updated headline · Berlin")`.
+   - **KV snapshot for criterion 7**: Test 10 (POST /admin/save no JWT → 403) checks status and body but NOT KV unchanged. Add explicit KV snapshot: read before POST, assert byte-identical after.
+   - **Test count**: Confirm `pnpm test` reports >= G6 baseline + new admin test count.
 
-**`handlePostAdminSave(request, env, _ctx)`** — calls `checkAdminIdentity`; on failure returns its response + KV untouched. Parses form body. Merges editable fields into a new config object; preserves `anthropic_api_key` from KV when submitted field is absent or empty after `.trim()`. If key non-empty: runs Anthropic test call (model, system, messages, max_tokens shape); on failure → 400 JSON `{ error: "anthropic_api_key rejected: ..." }` without writing KV. On success → `env.STATE.put("config", JSON.stringify(mergedConfig))` → 200 JSON `{ ok: true }`.
-
-### 2. Update `src/worker.ts`
-
-- Import `handleGetAdmin` and `handlePostAdminSave` from `./routes/admin`.
-- Replace inline `handleAdmin` stub with dispatch to `handleGetAdmin`.
-- Add dispatch for `POST /admin/save` to `handlePostAdminSave`.
-- Remove the now-unused local `handleAdmin` function.
-
-### 3. Create `src/test/admin.test.ts`
-
-Covers all 13 done_when criteria. Uses: `fetchMock`, `createJwtHarness`, `mintAccessJwt`, `env.STATE`, `ANTHROPIC_BASE_URL` override. Every 403/400 that should leave KV unchanged takes a KV snapshot before the request and asserts byte-identical JSON after.
-
-Test groups:
-- GET /admin 403 cases (no_jwt, signature_invalid, email_mismatch, aud_mismatch, team_domain_mismatch)
-- GET /admin 200 case (input fields pre-filled with config values)
-- POST /admin/save 403 (no JWT; KV snapshot unchanged)
-- POST /admin/save 200 (matching JWT + headline update → KV updated)
-- POST /admin/save empty key (key preserved in KV)
-- POST /admin/save bad key (400 + KV snapshot unchanged + Anthropic request body has model/system/messages/max_tokens)
-- cv_markdown propagation (POST /admin/save new cv → POST /chat Anthropic system contains new content)
-- Acceptance Test 10 (formal describe block, spec §12 steps 1–5)
-- Acceptance Test 11 (formal describe block, spec §12 steps 1–3)
+4. Fix implementations if tests reveal bugs; fix tests if the tests themselves are wrong.
 
 ## Implementation Notes
 
-**Shared identity guard**: `checkAdminIdentity` is a single function used by both handlers. This eliminates the risk of identity-check divergence between GET and POST.
+**AT11 spend key cleanup**: In `src/__tests__/admin/admin.test.ts` AT11's beforeEach, add:
+```ts
+const today = new Date().toISOString().slice(0, 10);
+await getEnv().STATE.delete(`spend:${today}`);
+```
+or include spend key in the shared `clearKv()` helper for this describe block.
 
-**Check ordering**: team_domain → aud → email (most to least fundamental).
+**Headline update assertion**: In Test 7 of POST /admin/save, after `expect(stored.anthropic_api_key).toBe("sk-ant-existing-key")`, add `expect(stored.headline).toBe("Updated headline · Berlin")` to satisfy done_when criterion 8 explicitly.
 
-**KV snapshot assertions**: Every 403/400 test reads KV before request and asserts byte-identical after.
+**KV snapshot for criterion 7**: In Test 10 (no JWT → 403), add:
+```ts
+const kvBefore = await getEnv().STATE.get("config");
+const res = await runFetch(adminSaveRequest(null, validSaveBody()));
+expect(res.status).toBe(403);
+expect(await getEnv().STATE.get("config")).toBe(kvBefore);
+```
 
-**Anthropic test call shape**: Must match setup.ts:131-144 shape: model `"claude-haiku-4-5-20251001"`, system `"You are a helpful assistant."`, messages `[{role:"user",content:"ping"}]`, max_tokens `1`.
+**Pre-registered falsifier**: `pnpm test` exit code non-zero, OR any test containing "FAIL" in its description, OR test count < G6 baseline + new admin tests.
 
-**anthropic_api_key merge**: Only replace when `form.get("anthropic_api_key")?.trim()` is a non-empty string.
-
-**cv_markdown propagation**: The chat handler reads config from KV on every request (no in-memory cache). After admin/save, next /chat automatically gets the new value.
-
-**Pre-registered falsifier**: Any admin test failure, or pnpm test count below G6 baseline + new admin tests, fails the goal.
+**Adversarial guard**: If AT11 POST /chat returns 503 instead of 200 and `captured.body` is null, the systemText assertions will fail on `expect(systemText).toContain("Brand new role at Acme")`. This is the primary AT11 failure mode — budget pollution from prior tests.
 
 ## Verification Criteria
 
-See verificationCriteria section.
+All 13 done_when criteria verified by passing tests:
+
+| Done When | Test | Verification |
+|---|---|---|
+| GET /admin no header → 403 | admin.test.ts Test 1 | status 403 + body.toContain("no_jwt") |
+| bad signature → 403 + signature_invalid | Test 2 | status 403 + body.toContain("signature_invalid") |
+| email mismatch → 403 + 'email' | Test 5 | status 403 + body.toContain("email_mismatch") (contains "email") |
+| aud mismatch → 403 + 'aud' | Test 4 | status 403 + body.toContain("aud_mismatch") (contains "aud") |
+| team_domain mismatch → 403 | Test 3 | status 403 |
+| match → 200 HTML with config values | Test 6 | status 200 + cv_markdown field + display_name + headline |
+| POST save no JWT → 403 + KV unchanged | Test 10 + KV snapshot | status 403 + kvBefore === kvAfter |
+| POST save match + headline → 200 + KV updated | Test 7 + headline assertion | status 200 + stored.headline === new value |
+| empty key → key preserved | Test 7 | stored.anthropic_api_key === original |
+| bad key → 400 + KV unchanged + shape | Test 9 | status 400 + capturedReqBody has model/system/messages/max_tokens |
+| cv_markdown propagation | AT11 | systemText contains new CV, not old |
+| AT10 + AT11 as formal tests | Lines 476-628 | both describe blocks pass |
+| pnpm build + typecheck + test exit 0 | CI commands | all exit 0; count >= baseline + new tests |
