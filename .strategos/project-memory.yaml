@@ -105,3 +105,23 @@ entries:
       - src/__tests__/setup/
       - src/__tests__/state-machine/
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G5
+    strategy_id: STR-da3dac65-e70d-4da6-96f9-5a55549aa405
+    completed_at: 2026-05-15T15:00:23.303Z
+    summary: "Goal G5: Public chat behavior (F4) completed."
+    findings:
+      - category: observation
+        text: "All 10 done-when criteria are MET. The G5 implementation is complete: GET
+          / renders the chat-page with owner profile fields and suggested
+          questions; POST /chat streams SSE with correct validation (400 on bad
+          input), 12-turn cap, 1500-char truncation, max_tokens=512, and a
+          system prompt containing cv_markdown plus all required behavioral
+          instructions. Acceptance Test 6 is implemented and all 119 tests pass
+          with clean build and typecheck."
+    affected_files:
+      - src/worker.ts
+      - src/routes/chat.ts
+      - src/routes/index.ts
+      - src/prompts/system.ts
+      - src/__tests__/chat/
+    baseline_after_goal: goal-completion gate passed (build + tests green)
