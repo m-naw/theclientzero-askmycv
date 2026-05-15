@@ -12,35 +12,8 @@
 import { handleRoot } from "./routes/index";
 import { handlePostSetup } from "./routes/setup";
 import { handlePostChat } from "./routes/chat";
-import { resolveJwksSource } from "./routes/jwks-source";
-import { verifyAccessJwt } from "./auth/access";
+import { handleAdminGet, handleAdminSave } from "./routes/admin";
 import type { Env } from "./env";
-
-const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" } as const;
-
-async function handleAdmin(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
-  const token = request.headers.get("cf-access-jwt-assertion");
-  if (!token) {
-    return new Response(JSON.stringify({ error: "missing jwt" }), {
-      status: 403,
-      headers: JSON_HEADERS,
-    });
-  }
-  const source = await resolveJwksSource(env);
-  let identity;
-  try {
-    identity = await verifyAccessJwt(token, source);
-  } catch {
-    return new Response(JSON.stringify({ error: "jwt verification failed" }), {
-      status: 403,
-      headers: JSON_HEADERS,
-    });
-  }
-  return new Response(JSON.stringify({ email: identity.email }), {
-    status: 200,
-    headers: JSON_HEADERS,
-  });
-}
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -63,7 +36,11 @@ export default {
     }
 
     if (url.pathname === "/admin" && request.method === "GET") {
-      return handleAdmin(request, env, ctx);
+      return handleAdminGet(request, env, ctx);
+    }
+
+    if (url.pathname === "/admin/save" && request.method === "POST") {
+      return handleAdminSave(request, env, ctx);
     }
 
     return new Response("not found", { status: 404 });
