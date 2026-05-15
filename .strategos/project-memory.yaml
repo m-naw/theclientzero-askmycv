@@ -125,3 +125,30 @@ entries:
       - src/prompts/system.ts
       - src/__tests__/chat/
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G6
+    strategy_id: STR-da3dac65-e70d-4da6-96f9-5a55549aa405
+    completed_at: 2026-05-15T16:06:47.527Z
+    summary: "Goal G6: Anti-abuse + daily budget cap (F6 + F7) completed."
+    findings:
+      - category: observation
+        text: "All 10 done-when criteria are MET. The workspace implements the full
+          anti-abuse and daily-budget-cap layer: bot UA rejection (403), per-IP
+          hourly rate limiting with KV auto-expiry (429), daily spend tracking
+          with expirationTtl >= 24 h (503), garbage-input guard (400), body-size
+          guard (413), model-appropriate pricing (Haiku 1/0.10/5; Sonnet
+          3/0.30/15), and spend writes that swallow errors so KV failures never
+          break the visitor stream. Acceptance tests 7/8/9 run in the Workers
+          pool. pnpm build, typecheck, and test all exit 0 with 180 tests green.
+          Minor observations: no dedicated pricing unit test (GR-ITER-003
+          finding); body-size guard acts on Content-Length header only; TTL
+          comment in spend.ts is misleading (TTL is 2 days from key-date
+          midnight, not 1)."
+    affected_files:
+      - src/worker.ts
+      - src/routes/chat.ts
+      - src/abuse/
+      - src/budget/
+      - src/pricing/
+      - src/__tests__/abuse/
+      - src/__tests__/budget/
+    baseline_after_goal: goal-completion gate passed (build + tests green)
