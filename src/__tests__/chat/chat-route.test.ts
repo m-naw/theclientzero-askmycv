@@ -251,4 +251,90 @@ describe("POST /chat", () => {
     expect(spend).not.toBeNull();
     expect(Number(spend)).toBeGreaterThan(0);
   });
+
+  // ----- System prompt content (spec §9 F4 done_when) ----------------
+
+  it("system prompt contains instruction to answer in first person", async () => {
+    const captured: CapturedRequest = { body: null, count: 0 };
+    mockAnthropicStream(captured);
+    const res = await runFetch(chatRequest({ messages: [{ role: "user", content: "Hi" }] }));
+    expect(res.status).toBe(200);
+    await drainStream(res);
+    const sent = captured.body as { system: Array<{ text: string }> | string };
+    const flat =
+      typeof sent.system === "string"
+        ? sent.system
+        : sent.system.map((b) => b.text).join("\n");
+    expect(flat.toLowerCase()).toMatch(/first[\s-]person/);
+  });
+
+  it("system prompt contains instruction to refuse out-of-CV questions", async () => {
+    const captured: CapturedRequest = { body: null, count: 0 };
+    mockAnthropicStream(captured);
+    const res = await runFetch(chatRequest({ messages: [{ role: "user", content: "Hi" }] }));
+    expect(res.status).toBe(200);
+    await drainStream(res);
+    const sent = captured.body as { system: Array<{ text: string }> | string };
+    const flat =
+      typeof sent.system === "string"
+        ? sent.system
+        : sent.system.map((b) => b.text).join("\n");
+    // Must contain wording about not being in profile/CV and redirecting
+    expect(flat.toLowerCase()).toMatch(/not in (my )?(profile|cv)|out[- ]of[- ]cv|ask (me|the owner)/);
+  });
+
+  it("system prompt contains [cv] citation token instruction", async () => {
+    const captured: CapturedRequest = { body: null, count: 0 };
+    mockAnthropicStream(captured);
+    const res = await runFetch(chatRequest({ messages: [{ role: "user", content: "Hi" }] }));
+    expect(res.status).toBe(200);
+    await drainStream(res);
+    const sent = captured.body as { system: Array<{ text: string }> | string };
+    const flat =
+      typeof sent.system === "string"
+        ? sent.system
+        : sent.system.map((b) => b.text).join("\n");
+    expect(flat).toContain("[cv]");
+  });
+
+  it("system prompt contains instruction to refuse prompt-injection attempts", async () => {
+    const captured: CapturedRequest = { body: null, count: 0 };
+    mockAnthropicStream(captured);
+    const res = await runFetch(chatRequest({ messages: [{ role: "user", content: "Hi" }] }));
+    expect(res.status).toBe(200);
+    await drainStream(res);
+    const sent = captured.body as { system: Array<{ text: string }> | string };
+    const flat =
+      typeof sent.system === "string"
+        ? sent.system
+        : sent.system.map((b) => b.text).join("\n");
+    expect(flat.toLowerCase()).toMatch(/inject|ignore (previous|prior)|extract|system prompt/);
+  });
+
+  it("system prompt contains instruction to politely decline off-topic requests", async () => {
+    const captured: CapturedRequest = { body: null, count: 0 };
+    mockAnthropicStream(captured);
+    const res = await runFetch(chatRequest({ messages: [{ role: "user", content: "Hi" }] }));
+    expect(res.status).toBe(200);
+    await drainStream(res);
+    const sent = captured.body as { system: Array<{ text: string }> | string };
+    const flat =
+      typeof sent.system === "string"
+        ? sent.system
+        : sent.system.map((b) => b.text).join("\n");
+    expect(flat.toLowerCase()).toMatch(/off[- ]topic|decline/);
+  });
+
+  // ----- Uppercase/garbage input detection (spec §9 F4 done_when) ----
+
+  it("returns 400 without contacting Anthropic when message is >100 chars and >70% uppercase", async () => {
+    const captured: CapturedRequest = { body: null, count: 0 };
+    mockAnthropicStream(captured);
+
+    // 110 characters, all uppercase — clearly >70% uppercase
+    const allCapsMsg = "A".repeat(110);
+    const res = await runFetch(chatRequest({ messages: [{ role: "user", content: allCapsMsg }] }));
+    expect(res.status).toBe(400);
+    expect(captured.count).toBe(0);
+  });
 });

@@ -90,6 +90,22 @@ export async function handlePostChat(request: Request, env: Env): Promise<Respon
 
   // ----- 2. clamp turns + truncate content --------------------------
   const rawMessages = body.messages as unknown[];
+
+  // Reject garbage input: messages where >100 chars and >70% are uppercase
+  // letters indicate bot/spam. Check the last (most recent) user message.
+  // Spec §9 F4 done_when.
+  for (const m of rawMessages) {
+    const obj = (m ?? {}) as { content?: unknown };
+    const content = typeof obj.content === "string" ? obj.content : "";
+    if (content.length > 100) {
+      const letters = content.replace(/[^a-zA-Z]/g, "");
+      const upperCount = letters.replace(/[^A-Z]/g, "").length;
+      if (letters.length > 0 && upperCount / letters.length > 0.7) {
+        return errorJson(400, "message rejected: excessive uppercase characters");
+      }
+    }
+  }
+
   const trimmed = rawMessages.slice(-MAX_TURNS).map((m): IncomingMessage => {
     const obj = (m ?? {}) as { role?: unknown; content?: unknown };
     const role = typeof obj.role === "string" ? obj.role : "user";
