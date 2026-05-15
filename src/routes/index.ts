@@ -27,7 +27,7 @@ const DEFAULT_SUGGESTED_QUESTIONS = [
   "What are your salary expectations?",
 ];
 
-export async function handleRoot(request: Request, env: Env): Promise<Response> {
+export async function handleRoot(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
   // Best-effort JWT verification. Missing token => unauthenticated path;
   // invalid token => unauthenticated path (verification errors are swallowed
   // here because the chat page must remain public).

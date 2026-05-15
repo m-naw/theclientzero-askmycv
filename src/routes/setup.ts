@@ -54,7 +54,7 @@ function readField(form: FormData, name: string): string {
   return v;
 }
 
-export async function handlePostSetup(request: Request, env: Env): Promise<Response> {
+export async function handlePostSetup(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
   // ----- 1. JWT --------------------------------------------------------
   const headerToken = request.headers.get("cf-access-jwt-assertion") ?? "";
   if (headerToken.length === 0) {

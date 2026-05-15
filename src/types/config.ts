@@ -40,6 +40,8 @@ export interface StoredConfig {
   pdf_cv_url?: string;
   /** Suggested starter questions shown to visitors. Optional; falls back to defaults. */
   suggested_questions?: string[];
+  /** Maximum number of chat messages allowed per IP per hour. Optional; defaults to 30. */
+  max_msgs_per_hour?: number;
 }
 
 /** Names of all required fields (used by the setup-form validator). */
@@ -56,6 +58,9 @@ export type RequiredSetupField = (typeof REQUIRED_SETUP_FIELDS)[number];
 /** CV markdown length bounds per spec F3. */
 export const CV_MIN_LENGTH = 200;
 export const CV_MAX_LENGTH = 50_000;
+
+/** Default rate limit: maximum messages per IP per hour when not explicitly configured. */
+export const DEFAULT_MAX_MSGS_PER_HOUR = 30;
 
 /**
  * Lightweight runtime validator. Returns `{ ok: true, value }` if the JSON
@@ -90,6 +95,12 @@ export function parseStoredConfig(
   }
   if (typeof r.setup_timestamp !== "number" || Number.isNaN(r.setup_timestamp)) {
     return { ok: false, error: "setup_timestamp must be a number" };
+  }
+  if (r.max_msgs_per_hour !== undefined) {
+    const v = r.max_msgs_per_hour;
+    if (typeof v !== "number" || !Number.isInteger(v) || v <= 0) {
+      return { ok: false, error: "max_msgs_per_hour must be a positive integer" };
+    }
   }
   return { ok: true, value: r as unknown as StoredConfig };
 }

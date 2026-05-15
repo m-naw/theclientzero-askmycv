@@ -72,7 +72,7 @@ async function readConfig(env: Env): Promise<StoredConfig | null> {
   }
 }
 
-export async function handlePostChat(request: Request, env: Env): Promise<Response> {
+export async function handlePostChat(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
   // ----- 1. body parsing + validation -------------------------------
   let parsed: unknown;
   try {

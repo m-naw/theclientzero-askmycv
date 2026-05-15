@@ -18,7 +18,7 @@ import type { Env } from "./env";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" } as const;
 
-async function handleAdmin(request: Request, env: Env): Promise<Response> {
+async function handleAdmin(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
   const token = request.headers.get("cf-access-jwt-assertion");
   if (!token) {
     return new Response(JSON.stringify({ error: "missing jwt" }), {
@@ -43,19 +43,19 @@ async function handleAdmin(request: Request, env: Env): Promise<Response> {
 }
 
 export default {
-  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname === "/" && request.method === "GET") {
-      return handleRoot(request, env);
+      return handleRoot(request, env, ctx);
     }
 
     if (url.pathname === "/setup" && request.method === "POST") {
-      return handlePostSetup(request, env);
+      return handlePostSetup(request, env, ctx);
     }
 
     if (url.pathname === "/chat" && request.method === "POST") {
-      return handlePostChat(request, env);
+      return handlePostChat(request, env, ctx);
     }
 
     if (url.pathname === "/health" && request.method === "GET") {
@@ -63,7 +63,7 @@ export default {
     }
 
     if (url.pathname === "/admin" && request.method === "GET") {
-      return handleAdmin(request, env);
+      return handleAdmin(request, env, ctx);
     }
 
     return new Response("not found", { status: 404 });
