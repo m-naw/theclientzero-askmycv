@@ -12,6 +12,7 @@ export default defineWorkersConfig({
           bindings: {
             ANTHROPIC_BASE_URL: "",
             ACCESS_JWKS_URL_OVERRIDE: "",
+            ANTHROPIC_TIMEOUT_MS: "30000",
           },
         },
       },

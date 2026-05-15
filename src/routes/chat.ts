@@ -23,6 +23,7 @@
  */
 
 import type { Env } from "../env";
+import { getAnthropicTimeoutMs } from "../env";
 import { parseStoredConfig, type StoredConfig, DEFAULT_MAX_MSGS_PER_HOUR } from "../types/config";
 import { buildSystemPrompt } from "../prompts/system";
 import { isBotUserAgent } from "../abuse/ua";
@@ -159,29 +160,45 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
       ? env.ANTHROPIC_BASE_URL
       : "https://api.anthropic.com";
 
-  const upstream = await fetch(`${baseUrl}/v1/messages`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": cfg.anthropic_api_key,
-      "anthropic-version": "2023-06-01",
-      accept: "text/event-stream",
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      stream: true,
-      system,
-      messages: trimmed,
-    }),
-  });
+  const timeoutMs = getAnthropicTimeoutMs(env);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": cfg.anthropic_api_key,
+        "anthropic-version": "2023-06-01",
+        accept: "text/event-stream",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        stream: true,
+        system,
+        messages: trimmed,
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    // AbortError means the timeout fired; any other error is also upstream unavailable.
+    return new Response(JSON.stringify({ error: "upstream_unavailable" }), {
+      status: 502,
+      headers: JSON_HEADERS,
+    });
+  }
+
+  clearTimeout(timeoutId);
 
   if (!upstream.ok || upstream.body === null) {
-    const detail = upstream.body ? await upstream.text().catch(() => "") : "";
-    return new Response(
-      JSON.stringify({ error: "anthropic upstream error", status: upstream.status, detail }),
-      { status: 502, headers: JSON_HEADERS },
-    );
+    return new Response(JSON.stringify({ error: "upstream_unavailable" }), {
+      status: 502,
+      headers: JSON_HEADERS,
+    });
   }
 
   // ----- 9/10. bridge SSE + track usage (spec §9 F6) ----------------
