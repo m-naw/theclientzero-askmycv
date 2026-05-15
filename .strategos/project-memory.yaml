@@ -59,3 +59,28 @@ entries:
       - src/views/client/streaming.ts
       - src/__tests__/views/
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G4
+    strategy_id: STR-da3dac65-e70d-4da6-96f9-5a55549aa405
+    completed_at: 2026-05-15T13:41:23.900Z
+    summary: "Goal G4: Auth + setup state machine behavior (F2 + F3) completed."
+    findings:
+      - category: observation
+        text: "Iteration ITR-1778848868023 (G4) PASSES: all 13 criteria are MET. Commit
+          2f111b0 (feat: rename-config-fields-and-add-admin-route) resolved the
+          three previously-unmet items: (1) 'headline' restored to
+          REQUIRED_SETUP_FIELDS and form template consistent with handler; (2)
+          'system' field added to the Anthropic test call completing the
+          required Messages API shape; (3) /admin route implemented eliminating
+          the 404 smoke-test failures. Build, typecheck, and test all exit 0
+          with 76 tests passing. GR-ITER-003 observation: one uncommitted test
+          addition in setup-acceptance.test.ts (daily_budget_usd validation) —
+          not a criterion failure, but the working tree is not clean at
+          handoff."
+    affected_files:
+      - src/worker.ts
+      - src/routes/
+      - src/auth/
+      - src/state/
+      - src/__tests__/setup/
+      - src/__tests__/state-machine/
+    baseline_after_goal: goal-completion gate passed (build + tests green)
