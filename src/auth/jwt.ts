@@ -28,7 +28,7 @@ import {
 /** Thrown when the token's signature is invalid, the issuer is wrong, or the
  *  token is structurally malformed. */
 export class InvalidTokenError extends Error {
-  override readonly name = "InvalidTokenError";
+  override readonly name: string = "InvalidTokenError";
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
   }
@@ -38,7 +38,7 @@ export class InvalidTokenError extends Error {
  *  window). Extends InvalidTokenError so callers that only catch the base
  *  class still handle expiry. */
 export class ExpiredTokenError extends InvalidTokenError {
-  override readonly name = "ExpiredTokenError";
+  override readonly name: string = "ExpiredTokenError";
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
   }

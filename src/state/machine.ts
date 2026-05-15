@@ -64,12 +64,13 @@ export interface StateResult {
 
 /**
  * Minimal shape stored in KV under the "config" key.
- * Only the identity fields are needed by the state machine.
+ * Only the identity fields are needed by the state machine; the full type
+ * lives in src/types/config.ts.
  */
-interface StoredConfig {
-  owner_email: string;
-  owner_aud: string;
-  owner_team_domain: string;
+interface StoredConfigIdentity {
+  access_email: string;
+  access_aud: string;
+  access_team_domain: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -111,18 +112,18 @@ export async function detectState(ctx: StateContext): Promise<StateResult> {
       return { state: State.C_CONFIGURED, reason: "access_denied" };
     }
 
-    let storedConfig: StoredConfig;
+    let storedConfig: StoredConfigIdentity;
     try {
-      storedConfig = JSON.parse(configRaw) as StoredConfig;
+      storedConfig = JSON.parse(configRaw) as StoredConfigIdentity;
     } catch {
       // Corrupt config — treat as access_denied to prevent broken access.
       return { state: State.C_CONFIGURED, reason: "access_denied" };
     }
 
     if (
-      ctx.jwtEmail !== storedConfig.owner_email ||
-      ctx.jwtAud !== storedConfig.owner_aud ||
-      ctx.jwtTeamDomain !== storedConfig.owner_team_domain
+      ctx.jwtEmail !== storedConfig.access_email ||
+      ctx.jwtAud !== storedConfig.access_aud ||
+      ctx.jwtTeamDomain !== storedConfig.access_team_domain
     ) {
       return { state: State.C_CONFIGURED, reason: "access_denied" };
     }

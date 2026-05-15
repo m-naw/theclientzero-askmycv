@@ -7,6 +7,9 @@ export {
   ExpiredTokenError,
 } from "./jwt";
 
+export { verifyAccessJwt } from "./access";
+export type { VerifiedAccessIdentity, VerifyAccessOptions } from "./access";
+
 export type {
   VerifyOptions,
   SignOptions,

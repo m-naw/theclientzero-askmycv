@@ -1,4 +1,16 @@
-import { createRemoteJWKSet, jwtVerify } from "jose";
+/**
+ * Worker entry point. Routes requests by method + path.
+ *
+ * Public routes (no auth): GET /, GET /health, POST /chat.
+ * Owner routes (Access JWT required): GET /setup-not-actually,
+ * POST /setup, GET /admin, POST /admin/save.
+ *
+ * Detailed auth is enforced in the route handlers — this file only
+ * dispatches.
+ */
+
+import { handleRoot } from "./routes/index";
+import { handlePostSetup } from "./routes/setup";
 import type { Env } from "./env";
 
 export default {
@@ -6,46 +18,17 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/" && request.method === "GET") {
-      return new Response("askmycv: foundation placeholder", {
-        status: 200,
-        headers: { "content-type": "text/plain; charset=utf-8" },
-      });
+      return handleRoot(request, env);
+    }
+
+    if (url.pathname === "/setup" && request.method === "POST") {
+      return handlePostSetup(request, env);
     }
 
     if (url.pathname === "/health" && request.method === "GET") {
       return new Response("ok", { status: 200 });
     }
 
-    if (url.pathname === "/admin" && request.method === "GET") {
-      return handleAdmin(request, env);
-    }
-
     return new Response("not found", { status: 404 });
   },
 } satisfies ExportedHandler<Env>;
-
-async function handleAdmin(request: Request, env: Env): Promise<Response> {
-  const jwt = request.headers.get("CF-Access-JWT-Assertion");
-  if (!jwt) {
-    return new Response("missing access jwt", { status: 403 });
-  }
-
-  const jwksUrl = env.ACCESS_JWKS_URL_OVERRIDE && env.ACCESS_JWKS_URL_OVERRIDE.length > 0
-    ? env.ACCESS_JWKS_URL_OVERRIDE
-    : "https://placeholder.cloudflareaccess.com/cdn-cgi/access/certs";
-
-  // Per-request JWKS client so the in-memory key cache does not leak
-  // across tests (the cache is closure-scoped to this call).
-  const jwks = createRemoteJWKSet(new URL(jwksUrl));
-
-  try {
-    const { payload } = await jwtVerify(jwt, jwks);
-    const email = typeof payload.email === "string" ? payload.email : "";
-    return new Response(JSON.stringify({ email }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  } catch {
-    return new Response("access denied", { status: 403 });
-  }
-}

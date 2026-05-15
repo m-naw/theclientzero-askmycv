@@ -54,9 +54,9 @@ const VALID_AUD = "my-audience";
 const VALID_TEAM_DOMAIN = "myteam.cloudflareaccess.com";
 
 const STORED_CONFIG = JSON.stringify({
-  owner_email: VALID_EMAIL,
-  owner_aud: VALID_AUD,
-  owner_team_domain: VALID_TEAM_DOMAIN,
+  access_email: VALID_EMAIL,
+  access_aud: VALID_AUD,
+  access_team_domain: VALID_TEAM_DOMAIN,
   display_name: "Test Owner",
 });
 
@@ -253,6 +253,28 @@ describe("State D — D_EXPIRED", () => {
     const result = await detectState(ctx({ kv, jwtValid: false, nowMs }));
 
     expect(result.state).toBe(State.A_UNCONFIGURED);
+  });
+
+  it("SM-D3: recovery after deletion — deleting setup_window_start restarts the window", async () => {
+    // Seed an expired window.
+    const startMs = 1_700_000_000_000;
+    await kv.put("setup_window_start", String(startMs));
+    const nowMs = startMs + SETUP_WINDOW_MS + 60_000;
+
+    const expired = await detectState(ctx({ kv, jwtValid: false, nowMs }));
+    expect(expired.state).toBe(State.D_EXPIRED);
+
+    // Owner performs documented recovery: delete the key from KV.
+    await kv.delete("setup_window_start");
+
+    // Next request behaves as a first visit, NOT as an expired window.
+    const recovered = await detectState(ctx({ kv, jwtValid: false, nowMs: nowMs + 1 }));
+    expect(recovered.state).toBe(State.A_UNCONFIGURED);
+    expect(recovered.state).not.toBe(State.D_EXPIRED);
+
+    // A fresh setup_window_start has been written.
+    expect(getStore(kv).has("setup_window_start")).toBe(true);
+    expect(getStore(kv).get("setup_window_start")).toBe(String(nowMs + 1));
   });
 });
 
