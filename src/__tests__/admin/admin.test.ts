@@ -50,7 +50,8 @@ function getEnv(): TestEnv {
 
 async function clearKv(): Promise<void> {
   const kv = getEnv().STATE;
-  for (const key of ["config", "setup_window_start", TEST_JWKS_KV_KEY]) {
+  const today = new Date().toISOString().slice(0, 10);
+  for (const key of ["config", "setup_window_start", TEST_JWKS_KV_KEY, `spend:${today}`]) {
     await kv.delete(key);
   }
 }
@@ -299,9 +300,18 @@ describe("POST /admin/save", () => {
     const res = await runFetch(adminSaveRequest(jwt, body));
     expect(res.status).toBe(200);
 
-    // Existing key preserved in KV
+    // KV snapshot: full config reflects submitted payload
     const stored = JSON.parse((await getEnv().STATE.get("config")) as string) as StoredConfig;
+    // Existing key preserved in KV (blank field does not overwrite)
     expect(stored.anthropic_api_key).toBe("sk-ant-existing-key");
+    // Updated fields match the submitted payload
+    expect(stored.display_name).toBe("Jane Doe Updated");
+    expect(stored.headline).toBe("Updated headline · Berlin");
+    expect(stored.daily_budget_usd).toBe(7);
+    // Immutable identity fields are untouched
+    expect(stored.access_email).toBe(cfg.access_email);
+    expect(stored.access_aud).toBe(cfg.access_aud);
+    expect(stored.access_team_domain).toBe(cfg.access_team_domain);
     // Key never in response HTML
     const html = await res.clone().text().catch(() => "");
     expect(html).not.toContain("sk-ant-existing-key");
@@ -331,6 +341,10 @@ describe("POST /admin/save", () => {
     // Key never in response
     const html = await res.text();
     expect(html).not.toContain("sk-ant-new-rotated-key");
+    // Headline must appear in the returned admin HTML (success page shows updated form)
+    expect(html).toContain("Updated headline · Berlin");
+    // Edit configuration headline must be rendered
+    expect(html).toContain("Edit configuration");
   });
 
   // Test 9: invalid new API key returns 400 and does not update config
