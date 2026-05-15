@@ -28,6 +28,18 @@ export interface StoredConfig {
   access_team_domain: string;
   /** ms-since-epoch timestamp at which setup completed. Required. */
   setup_timestamp: number;
+
+  // ---- Optional profile fields (spec §9 F3 / F4) ----
+  /** Owner's location shown on the chat page. Optional. */
+  location?: string;
+  /** LinkedIn profile URL rendered as an anchor. Optional. */
+  linkedin_url?: string;
+  /** GitHub profile URL rendered as an anchor. Optional. */
+  github_url?: string;
+  /** PDF CV download URL rendered as an anchor. Optional. */
+  pdf_cv_url?: string;
+  /** Suggested starter questions shown to visitors. Optional; falls back to defaults. */
+  suggested_questions?: string[];
 }
 
 /** Names of all required fields (used by the setup-form validator). */

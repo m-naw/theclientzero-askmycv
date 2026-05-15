@@ -95,10 +95,20 @@ export async function handleRoot(request: Request, env: Env): Promise<Response> 
         return new Response(renderSetupInstructions(), { status: 200, headers: HTML_HEADERS });
       }
       const cfg = parsed.value;
+      // Use configured suggested_questions when there are at least 3; otherwise
+      // fall back to the built-in defaults so renderChatPage never throws.
+      const suggestedQuestions =
+        Array.isArray(cfg.suggested_questions) && cfg.suggested_questions.length >= 3
+          ? cfg.suggested_questions
+          : DEFAULT_SUGGESTED_QUESTIONS;
       const props: ChatPageProps = {
         display_name: cfg.display_name,
         headline: cfg.headline,
-        suggested_questions: DEFAULT_SUGGESTED_QUESTIONS,
+        location: cfg.location,
+        linkedin_url: cfg.linkedin_url,
+        github_url: cfg.github_url,
+        pdf_cv_url: cfg.pdf_cv_url,
+        suggested_questions: suggestedQuestions,
       };
       return new Response(renderChatPage(props), { status: 200, headers: HTML_HEADERS });
     }
