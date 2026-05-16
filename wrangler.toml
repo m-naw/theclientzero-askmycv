@@ -18,6 +18,6 @@ id = "REPLACE_WITH_KV_NAMESPACE_ID"
 # this committed file — production reads the Anthropic API key from KV
 # (env.STATE.get('secrets')), never from [vars].
 [vars]
-ANTHROPIC_BASE_URL = ""
+ANTHROPIC_BASE_URL = "https://api.anthropic.com"
 ACCESS_JWKS_URL_OVERRIDE = ""
 ANTHROPIC_TIMEOUT_MS = "30000"
