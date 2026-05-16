@@ -21,6 +21,8 @@ import {
   REQUIRED_SETUP_FIELDS,
   CV_MIN_LENGTH,
   CV_MAX_LENGTH,
+  ALLOWED_MODELS,
+  DEFAULT_MODEL,
   type StoredConfig,
   type RequiredSetupField,
 } from "../types/config";
@@ -126,6 +128,13 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
     );
   }
 
+  // ----- 4b. Optional fields: model + accent_color --------------------
+  const modelRaw = readField(form, "model");
+  const model = (ALLOWED_MODELS as readonly string[]).includes(modelRaw)
+    ? modelRaw
+    : DEFAULT_MODEL;
+  const accentColor = readField(form, "accent_color").trim() || undefined;
+
   // ----- 5. Anthropic test call ---------------------------------------
   const apiKey = parsed.anthropic_api_key as string;
   try {
@@ -159,6 +168,8 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
     access_aud: identity.aud,
     access_team_domain: identity.team_domain,
     setup_timestamp: Date.now(),
+    model,
+    accent_color: accentColor,
   };
 
   await env.STATE.put("config", JSON.stringify(config));

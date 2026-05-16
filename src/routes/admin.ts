@@ -19,7 +19,14 @@ import { verifyOwnerIdentity } from "../auth/identity";
 import { resolveJwksSource } from "./jwks-source";
 import { renderAdminForm } from "../views/admin-form";
 import { renderAccessDenied, type AccessDenialReason } from "../views/error-pages";
-import { parseStoredConfig, CV_MIN_LENGTH, CV_MAX_LENGTH, type StoredConfig } from "../types/config";
+import {
+  parseStoredConfig,
+  CV_MIN_LENGTH,
+  CV_MAX_LENGTH,
+  ALLOWED_MODELS,
+  DEFAULT_MODEL,
+  type StoredConfig,
+} from "../types/config";
 import type { Env } from "../env";
 
 const HTML_HEADERS = { "content-type": "text/html; charset=utf-8" } as const;
@@ -101,6 +108,8 @@ export async function handleAdminGet(
       github_url: config.github_url,
       pdf_cv_url: config.pdf_cv_url,
       max_msgs_per_hour: config.max_msgs_per_hour,
+      model: config.model,
+      accent_color: config.accent_color,
     },
   });
 
@@ -180,6 +189,11 @@ export async function handleAdminSave(
       max_msgs_per_hour = parsed;
     }
   }
+  const modelRaw = readField(form, "model");
+  const model = (ALLOWED_MODELS as readonly string[]).includes(modelRaw)
+    ? modelRaw
+    : (config.model ?? DEFAULT_MODEL);
+  const accent_color = readField(form, "accent_color").trim() || undefined;
 
   // --- Anthropic key: blank = preserve existing; non-blank = validate + replace ---
   const newKeyRaw = readField(form, "anthropic_api_key");
@@ -222,6 +236,8 @@ export async function handleAdminSave(
     github_url,
     pdf_cv_url,
     max_msgs_per_hour,
+    model,
+    accent_color,
   };
 
   await env.STATE.put("config", JSON.stringify(updated));
@@ -239,6 +255,8 @@ export async function handleAdminSave(
       github_url: updated.github_url,
       pdf_cv_url: updated.pdf_cv_url,
       max_msgs_per_hour: updated.max_msgs_per_hour,
+      model: updated.model,
+      accent_color: updated.accent_color,
     },
   });
 
