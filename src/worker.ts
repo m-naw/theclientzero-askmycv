@@ -10,7 +10,7 @@
  */
 
 import { handleRoot } from "./routes/index";
-import { handlePostSetup } from "./routes/setup";
+import { handlePostSetup, handleGetSetup } from "./routes/setup";
 import { handlePostChat } from "./routes/chat";
 import { handleAdminGet, handleAdminSave } from "./routes/admin";
 import type { Env } from "./env";
@@ -21,6 +21,10 @@ export default {
 
     if (url.pathname === "/" && request.method === "GET") {
       return handleRoot(request, env, ctx);
+    }
+
+    if (url.pathname === "/setup" && request.method === "GET") {
+      return handleGetSetup(request, env, ctx);
     }
 
     if (url.pathname === "/setup" && request.method === "POST") {

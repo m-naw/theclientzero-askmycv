@@ -26,8 +26,9 @@ import {
 } from "../types/config";
 import { verifyAccessJwt } from "../auth/access";
 import { resolveJwksSource } from "./jwks-source";
-import { renderExpiredSetup } from "../views";
+import { renderExpiredSetup, renderSetupForm } from "../views";
 import { escapeHtml } from "../views/escape";
+import { readAccessJwt } from "../auth/access-token";
 import type { Env } from "../env";
 
 const HTML_HEADERS = { "content-type": "text/html; charset=utf-8" } as const;
@@ -56,7 +57,7 @@ function readField(form: FormData, name: string): string {
 
 export async function handlePostSetup(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
   // ----- 1. JWT --------------------------------------------------------
-  const headerToken = request.headers.get("cf-access-jwt-assertion") ?? "";
+  const headerToken = readAccessJwt(request);
   if (headerToken.length === 0) {
     return errorResponse(403, "missing cf-access-jwt-assertion header");
   }
@@ -179,4 +180,49 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
 </html>`;
 
   return new Response(html, { status: 200, headers: HTML_HEADERS });
+}
+
+/**
+ * GET /setup — renders the setup form for an authenticated owner when no
+ * config exists yet. After the owner clicks the "Continue" link on the
+ * setup-instructions page, Access challenges them, then this handler
+ * verifies the resulting JWT and shows the form. If config already exists
+ * the owner is redirected to /admin (no re-setup path).
+ */
+export async function handleGetSetup(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  const token = readAccessJwt(request);
+  if (token.length === 0) {
+    return errorResponse(403, "missing cf-access-jwt-assertion header");
+  }
+
+  const source = await resolveJwksSource(env);
+  let identity;
+  try {
+    identity = await verifyAccessJwt(token, source);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "jwt verification failed";
+    return errorResponse(403, `jwt verification failed: ${msg}`);
+  }
+
+  const existing = await env.STATE.get("config");
+  if (existing !== null) {
+    const url = new URL(request.url);
+    return Response.redirect(`${url.protocol}//${url.host}/admin`, 302);
+  }
+
+  const windowRaw = await env.STATE.get("setup_window_start");
+  if (windowRaw !== null) {
+    const startMs = Number(windowRaw);
+    if (Number.isFinite(startMs) && Date.now() - startMs > SETUP_WINDOW_MS) {
+      return new Response(renderExpiredSetup({ setupWindowStart: String(startMs) }), {
+        status: 403,
+        headers: HTML_HEADERS,
+      });
+    }
+  }
+
+  return new Response(renderSetupForm({ email: identity.email }), {
+    status: 200,
+    headers: HTML_HEADERS,
+  });
 }

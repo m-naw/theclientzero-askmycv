@@ -10,6 +10,7 @@
  */
 
 import { verifyAccessJwt, type VerifiedAccessIdentity } from "./access";
+import { readAccessJwt } from "./access-token";
 import type { JwksDocument } from "./jwt";
 import type { StoredConfig } from "../types/config";
 
@@ -63,9 +64,9 @@ export async function verifyOwnerIdentity(
   config: StoredConfig,
   opts: VerifyOwnerIdentityOptions,
 ): Promise<OwnerIdentityResult> {
-  // --- 1. JWT presence ---
-  const token = request.headers.get("cf-access-jwt-assertion");
-  if (!token || token.length === 0) {
+  // --- 1. JWT presence (header or CF_Authorization cookie fallback) ---
+  const token = readAccessJwt(request);
+  if (token.length === 0) {
     return { ok: false, reason: "no_jwt" };
   }
 
