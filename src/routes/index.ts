@@ -16,6 +16,7 @@ import {
 } from "../views";
 import { parseStoredConfig } from "../types/config";
 import { verifyAccessJwt } from "../auth/access";
+import { readAccessJwt } from "../auth/access-token";
 import { resolveJwksSource } from "./jwks-source";
 
 const HTML_HEADERS = { "content-type": "text/html; charset=utf-8" } as const;
@@ -31,7 +32,7 @@ export async function handleRoot(request: Request, env: Env, _ctx: ExecutionCont
   // Best-effort JWT verification. Missing token => unauthenticated path;
   // invalid token => unauthenticated path (verification errors are swallowed
   // here because the chat page must remain public).
-  const headerToken = request.headers.get("cf-access-jwt-assertion") ?? "";
+  const headerToken = readAccessJwt(request);
   let jwtValid = false;
   let jwtEmail: string | undefined;
   let jwtAud: string | undefined;
