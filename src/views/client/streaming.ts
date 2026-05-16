@@ -38,14 +38,17 @@ export const CHAT_STREAMING_SCRIPT = `
     return div;
   }
 
+  var history = [];
+
   function send(question) {
     appendBubble('user').textContent = question;
     var bubble = appendBubble('assistant');
     var acc = '';
+    history.push({ role: 'user', content: question });
     fetch('/chat', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ message: question }),
+      body: JSON.stringify({ messages: history }),
     }).then(function (res) {
       if (!res.body) {
         bubble.textContent = '(no stream)';
@@ -55,7 +58,10 @@ export const CHAT_STREAMING_SCRIPT = `
       var dec = new TextDecoder();
       function pump() {
         return reader.read().then(function (r) {
-          if (r.done) return;
+          if (r.done) {
+            if (acc) history.push({ role: 'assistant', content: acc });
+            return;
+          }
           var chunk = dec.decode(r.value, { stream: true });
           chunk.split(/\\n\\n/).forEach(function (frame) {
             var line = frame.split(/\\n/).filter(function (l) { return l.indexOf('data:') === 0; })[0];
