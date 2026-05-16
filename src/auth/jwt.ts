@@ -11,6 +11,7 @@
 
 import {
   createRemoteJWKSet,
+  decodeJwt,
   exportJWK,
   generateKeyPair,
   importJWK,
@@ -89,8 +90,36 @@ export interface RefreshOptions extends SignOptions {
 /** Pattern required for the issuer claim. */
 const CLOUDFLARE_ISS_PATTERN = /^https:\/\/[^/]+\.cloudflareaccess\.com$/;
 
+/**
+ * Resolve a JWKS URL when the configured value is the "auto" sentinel
+ * (or empty/whitespace, for defense in depth). In that case the URL is
+ * derived from the unverified token's iss claim as
+ * `${iss}/cdn-cgi/access/certs`. The iss is validated against the
+ * Cloudflare Access pattern before use so an attacker-controlled token
+ * cannot redirect JWKS fetches to an arbitrary host.
+ */
+function resolveJwksUrl(token: string, jwksUrl: string | undefined): string {
+  const trimmed = (jwksUrl ?? "").trim();
+  if (trimmed.length > 0 && trimmed !== "auto") {
+    return jwksUrl as string;
+  }
+
+  let iss: unknown;
+  try {
+    iss = decodeJwt(token).iss;
+  } catch (err) {
+    throw new InvalidTokenError("token is not a decodable JWT", { cause: err });
+  }
+  if (typeof iss !== "string") {
+    throw new InvalidTokenError("token is missing iss claim");
+  }
+  assertIssuer(iss);
+  return `${iss}/cdn-cgi/access/certs`;
+}
+
 /** Build a jose key input from either an override or a remote URL. */
 async function buildKeyInput(
+  token: string,
   opts: VerifyOptions,
 ): Promise<Parameters<typeof jwtVerify>[1]> {
   if (opts.jwksOverride) {
@@ -106,11 +135,12 @@ async function buildKeyInput(
     };
   }
 
-  if (!opts.jwksUrl) {
+  if (opts.jwksUrl === undefined) {
     throw new InvalidTokenError("either jwksOverride or jwksUrl must be provided");
   }
 
-  return createRemoteJWKSet(new URL(opts.jwksUrl));
+  const url = resolveJwksUrl(token, opts.jwksUrl);
+  return createRemoteJWKSet(new URL(url));
 }
 
 /** Validate that the issuer matches the Cloudflare Access pattern. */
@@ -141,7 +171,7 @@ export async function verify(
   token: string,
   opts: VerifyOptions,
 ): Promise<VerifiedPayload> {
-  const keyInput = await buildKeyInput(opts);
+  const keyInput = await buildKeyInput(token, opts);
 
   let payload: JWTPayload;
   try {
@@ -212,7 +242,7 @@ export async function refresh(
   opts: RefreshOptions,
 ): Promise<string> {
   const gracePeriodSec = opts.gracePeriodSec ?? 300;
-  const keyInput = await buildKeyInput(opts.verify ?? {});
+  const keyInput = await buildKeyInput(token, opts.verify ?? {});
 
   let payload: JWTPayload;
   try {

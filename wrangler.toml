@@ -19,5 +19,5 @@ id = "REPLACE_WITH_KV_NAMESPACE_ID"
 # (env.STATE.get('secrets')), never from [vars].
 [vars]
 ANTHROPIC_BASE_URL = "https://api.anthropic.com"
-ACCESS_JWKS_URL_OVERRIDE = ""
+ACCESS_JWKS_URL_OVERRIDE = "auto"
 ANTHROPIC_TIMEOUT_MS = "30000"

@@ -183,7 +183,7 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
       }),
       signal: controller.signal,
     });
-  } catch (err) {
+  } catch {
     clearTimeout(timeoutId);
     // AbortError means the timeout fired; any other error is also upstream unavailable.
     return new Response(JSON.stringify({ error: "upstream_unavailable" }), {

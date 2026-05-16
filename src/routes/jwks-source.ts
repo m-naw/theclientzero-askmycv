@@ -33,10 +33,12 @@ export async function resolveJwksSource(env: Env): Promise<JwksSource> {
     }
   }
 
-  const url =
-    env.ACCESS_JWKS_URL_OVERRIDE && env.ACCESS_JWKS_URL_OVERRIDE.length > 0
-      ? env.ACCESS_JWKS_URL_OVERRIDE
-      : "https://placeholder.cloudflareaccess.com/cdn-cgi/access/certs";
+  // "auto", empty, or whitespace-only ⇒ no override; the JWT verifier
+  // derives the JWKS URL from the token's iss claim. Any other value is
+  // used verbatim as a direct JWKS URL.
+  const rawOverride = env.ACCESS_JWKS_URL_OVERRIDE ?? "";
+  const trimmed = rawOverride.trim();
+  const url = trimmed.length === 0 || trimmed === "auto" ? "auto" : rawOverride;
 
   return { jwksUrl: url };
 }
