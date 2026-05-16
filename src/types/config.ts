@@ -42,7 +42,20 @@ export interface StoredConfig {
   suggested_questions?: string[];
   /** Maximum number of chat messages allowed per IP per hour. Optional; defaults to 30. */
   max_msgs_per_hour?: number;
+  /** Anthropic model identifier used for chat. Optional; defaults to DEFAULT_MODEL.
+   *  Must be a value from ALLOWED_MODELS. */
+  model?: string;
+  /** Page accent color (CSS color literal — hex, named, or otherwise). Optional. */
+  accent_color?: string;
 }
+
+/** Models the setup/admin forms expose. Other values are rejected at save. */
+export const ALLOWED_MODELS = [
+  "claude-haiku-4-5-20251001",
+  "claude-sonnet-4-6",
+] as const;
+
+export const DEFAULT_MODEL: (typeof ALLOWED_MODELS)[number] = "claude-haiku-4-5-20251001";
 
 /** Names of all required fields (used by the setup-form validator). */
 export const REQUIRED_SETUP_FIELDS = [
@@ -101,6 +114,14 @@ export function parseStoredConfig(
     if (typeof v !== "number" || !Number.isInteger(v) || v <= 0) {
       return { ok: false, error: "max_msgs_per_hour must be a positive integer" };
     }
+  }
+  if (r.model !== undefined) {
+    if (typeof r.model !== "string" || !(ALLOWED_MODELS as readonly string[]).includes(r.model)) {
+      return { ok: false, error: "model must be one of the allowed values" };
+    }
+  }
+  if (r.accent_color !== undefined && typeof r.accent_color !== "string") {
+    return { ok: false, error: "accent_color must be a string" };
   }
   return { ok: true, value: r as unknown as StoredConfig };
 }

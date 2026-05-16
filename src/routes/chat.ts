@@ -24,7 +24,12 @@
 
 import type { Env } from "../env";
 import { getAnthropicTimeoutMs } from "../env";
-import { parseStoredConfig, type StoredConfig, DEFAULT_MAX_MSGS_PER_HOUR } from "../types/config";
+import {
+  parseStoredConfig,
+  type StoredConfig,
+  DEFAULT_MAX_MSGS_PER_HOUR,
+  DEFAULT_MODEL,
+} from "../types/config";
 import { buildSystemPrompt } from "../prompts/system";
 import { isBotUserAgent } from "../abuse/ua";
 import { isGarbageInput } from "../abuse/input-guard";
@@ -42,7 +47,6 @@ const SSE_HEADERS = {
 const MAX_TURNS = 12;
 const MAX_CHARS_PER_MESSAGE = 1500;
 const MAX_OUTPUT_TOKENS = 512;
-const MODEL = "claude-haiku-4-5-20251001";
 const MAX_BODY_BYTES = 100 * 1024; // 100 KiB
 
 interface IncomingMessage {
@@ -153,6 +157,7 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
 
   // ----- 7. build system prompt -------------------------------------
   const system = buildSystemPrompt(cfg.cv_markdown);
+  const model = cfg.model ?? DEFAULT_MODEL;
 
   // ----- 8. call Anthropic streaming --------------------------------
   const baseUrl =
@@ -175,7 +180,7 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
         accept: "text/event-stream",
       },
       body: JSON.stringify({
-        model: MODEL,
+        model,
         max_tokens: MAX_OUTPUT_TOKENS,
         stream: true,
         system,
@@ -246,7 +251,7 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
       // alive until the KV write completes. Failures are swallowed.
       try {
         const cost = computeCostUsd({
-          model: MODEL,
+          model,
           inputTokens: usage.input,
           cachedInputTokens: usage.cached,
           outputTokens: usage.output,

@@ -12,6 +12,11 @@ export const MODEL_PRICING: Record<
     cachedPerMillion: 0.1,
     outputPerMillion: 5,
   },
+  "claude-sonnet-4-6": {
+    inputPerMillion: 3,
+    cachedPerMillion: 0.3,
+    outputPerMillion: 15,
+  },
   // Alias for any haiku variant
   haiku: {
     inputPerMillion: 1,

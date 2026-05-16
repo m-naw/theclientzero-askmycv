@@ -110,6 +110,7 @@ export async function handleRoot(request: Request, env: Env, _ctx: ExecutionCont
         github_url: cfg.github_url,
         pdf_cv_url: cfg.pdf_cv_url,
         suggested_questions: suggestedQuestions,
+        accent_color: cfg.accent_color,
       };
       return new Response(renderChatPage(props), { status: 200, headers: HTML_HEADERS });
     }
