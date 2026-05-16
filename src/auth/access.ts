@@ -53,8 +53,21 @@ export async function verifyAccessJwt(
   if (!payload.email || typeof payload.email !== "string") {
     throw new InvalidTokenError("token is missing email claim");
   }
-  if (typeof payload.aud !== "string" || payload.aud.length === 0) {
-    throw new InvalidTokenError("token is missing string aud claim");
+  // Cloudflare Access emits `aud` as an array with a single element (the
+  // Application Audience tag), but the JWT RFC permits string or string[].
+  // Normalize to the first string element for downstream comparison.
+  let aud: string;
+  if (typeof payload.aud === "string" && payload.aud.length > 0) {
+    aud = payload.aud;
+  } else if (
+    Array.isArray(payload.aud) &&
+    payload.aud.length > 0 &&
+    typeof payload.aud[0] === "string" &&
+    payload.aud[0].length > 0
+  ) {
+    aud = payload.aud[0];
+  } else {
+    throw new InvalidTokenError("token is missing aud claim");
   }
   if (typeof payload.iss !== "string") {
     throw new InvalidTokenError("token is missing iss claim");
@@ -70,7 +83,7 @@ export async function verifyAccessJwt(
 
   return {
     email: payload.email,
-    aud: payload.aud,
+    aud,
     team_domain,
     raw: payload,
   };
