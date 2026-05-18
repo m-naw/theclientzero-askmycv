@@ -200,7 +200,28 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
   clearTimeout(timeoutId);
 
   if (!upstream.ok || upstream.body === null) {
-    return new Response(JSON.stringify({ error: "upstream_unavailable" }), {
+    // F11: distinguish Anthropic insufficient-credit response from generic
+    // upstream failures so the chat UI can surface a credit-specific notice.
+    // Captured shape: references/anthropic-messages-error.json (HTTP 400,
+    // invalid_request_error, message contains "credit").
+    let reason: string | undefined;
+    try {
+      const text = await upstream.text();
+      if (text.length > 0) {
+        const parsed: unknown = JSON.parse(text);
+        const msg =
+          (parsed as { error?: { message?: unknown } } | null)?.error?.message;
+        if (typeof msg === "string" && msg.toLowerCase().includes("credit")) {
+          reason = "credits";
+        }
+      }
+    } catch {
+      /* unparseable upstream body — fall through to generic */
+    }
+    const body = reason
+      ? { error: "upstream_unavailable", reason }
+      : { error: "upstream_unavailable" };
+    return new Response(JSON.stringify(body), {
       status: 502,
       headers: JSON_HEADERS,
     });

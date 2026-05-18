@@ -125,8 +125,11 @@ describe("GET / — handleRoot forwards optional StoredConfig profile fields to 
     // No LinkedIn anchor
     expect(html).not.toContain("linkedin.com");
 
-    // No GitHub anchor
-    expect(html).not.toContain("github.com");
+    // No user-configured GitHub anchor. The mandatory maintainer
+    // attribution footer (AGPL-3.0 Section 7(b)) always renders a link
+    // to https://github.com/m-naw/theclientzero-askmycv, so we assert
+    // that no user-supplied github.com URL leaks into the page header.
+    expect(html).not.toMatch(/href="https:\/\/github\.com\/(?!m-naw\/)/);
 
     // No PDF CV anchor
     expect(html).not.toContain(".pdf");
