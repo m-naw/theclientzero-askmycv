@@ -127,9 +127,10 @@ describe("Setup without Cloudflare Access JWT", () => {
 
     expect(res.status).toBe(303);
 
-    // Location must point to /admin
+    // Location must point to / (root)
     const location = res.headers.get("Location") ?? "";
-    expect(location).toContain("/admin");
+    expect(location).toMatch(/\/$/);
+    expect(location).not.toContain("/admin");
 
     // Set-Cookie must be present with required security attributes
     const setCookie = res.headers.get("Set-Cookie") ?? "";

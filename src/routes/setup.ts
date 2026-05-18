@@ -235,16 +235,16 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
   await env.STATE.put(ADMIN_PASSWORD_HASH_KEY, adminPasswordHash);
   await env.STATE.put("cookie_signing_secret", cookieSigningSecret);
 
-  // ----- 7. issue session cookie + 303 redirect to /admin -------------
+  // ----- 7. issue session cookie + 303 redirect to / ------------------
   const sessionCookieHeader = await createSessionCookie(env.STATE);
 
   const workerUrl = new URL(request.url);
-  const adminUrl = `${workerUrl.protocol}//${workerUrl.host}/admin`;
+  const rootUrl = `${workerUrl.protocol}//${workerUrl.host}/`;
 
   return new Response(null, {
     status: 303,
     headers: {
-      "Location": adminUrl,
+      "Location": rootUrl,
       "Set-Cookie": sessionCookieHeader,
     },
   });
