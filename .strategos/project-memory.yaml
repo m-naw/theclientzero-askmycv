@@ -215,3 +215,27 @@ entries:
       - src/prompts/system.ts
       - src/types/config.ts
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G2
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-18T00:34:20.979Z
+    summary: "Goal G2: Foundation: config schema, theme system, system prompt, SEO,
+      accessibility baseline completed."
+    findings:
+      - category: observation
+        text: "All 17 criteria are MET. The iteration successfully implements:
+          admin_password and theme fields in setup form, dual-theme token system
+          with #181613 (dark) and #fafaf7 (light) hex values, data-theme
+          attribute on html element, plain text/no markdown system prompt
+          instruction, og:title and twitter:card SEO meta tags, role=log
+          accessibility attribute, and font preloads for Fraunces, Instrument
+          Sans, and JetBrains Mono. All 226 tests pass (up from baseline 214),
+          and build/typecheck/lint are clean."
+    affected_files:
+      - src/views/setup-form.ts
+      - src/views/admin-form.ts
+      - src/views/chat-page.ts
+      - src/views/layout.ts
+      - src/views/design-tokens.ts
+      - src/prompts/system.ts
+      - src/types/config.ts
+    baseline_after_goal: goal-completion gate passed (build + tests green)
