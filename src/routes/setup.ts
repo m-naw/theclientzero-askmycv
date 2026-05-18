@@ -4,7 +4,7 @@
  *
  * Gate order for POST (must remain in this order):
  *   1. Config already in KV → 403 (no re-setup).
- *   2. setup_window_start present AND > 30 min old → expired page (410).
+   *   2. setup_window_start present AND expired → 403 JSON {error, expired_at, recovery_summary}.
  *   3. Required-field presence and bounds → 400.
  *   4. admin_password length 12..128 → 400 on violation.
  *   5. Anthropic key live test call → 400 on rejection.
