@@ -239,3 +239,33 @@ entries:
       - src/prompts/system.ts
       - src/types/config.ts
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G3
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-18T03:15:09.421Z
+    summary: "Goal G3: Admin password authentication, admin panel additions, setup
+      window tightening completed."
+    findings:
+      - category: observation
+        text: "All 26 criteria MET. The followup-2 sprint resolved the 2 smoke test
+          failures from the previous review (the tests now correctly model
+          password-primary auth with optional CF Access JWT). Final state:
+          240/240 tests pass, build and typecheck clean, bcrypt cost 12
+          confirmed, HMAC-SHA256 session cookies implemented, 600s setup window
+          enforced, DELETE ALL CONFIG reset present, contract parity script
+          passes, all structural artifacts (auth-surface.md,
+          check-contract-parity.mjs, Danger Zone UI, session cookie attributes)
+          verified in workspace."
+    affected_files:
+      - src/auth/access.ts
+      - src/auth/access-token.ts
+      - src/auth/identity.ts
+      - src/auth/jwt.ts
+      - src/routes/setup.ts
+      - src/routes/admin.ts
+      - src/state/machine.ts
+      - src/types/config.ts
+      - src/abuse/rate-limit.ts
+      - package.json
+      - src/__tests__/admin/admin.test.ts
+      - src/__tests__/setup/setup-acceptance.test.ts
+    baseline_after_goal: goal-completion gate passed (build + tests green)
