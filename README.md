@@ -10,12 +10,20 @@ One-click self-host on your own Cloudflare account — no signup, no shared serv
 
 After the one-click deploy:
 
-1. Open the Worker URL printed by Cloudflare.
-2. Follow the in-page instructions to gate `/admin` and `/setup` behind Cloudflare Access.
-3. Sign in via Access, paste your Anthropic API key + CV markdown, and save.
-4. Share the public URL — visitors can ask questions about your CV without any login.
+1. Open the Worker URL printed by Cloudflare — you have 10 minutes to complete setup.
+2. Visit `/setup`, fill in your admin password (12–128 chars), Anthropic API key, and CV markdown, then submit. You are redirected to `/admin` and logged in via session cookie.
+3. Share the public URL — visitors can ask questions about your CV without any login.
 
 See [`cv.example.md`](./cv.example.md) for the expected CV markdown shape.
+
+### Optional: Cloudflare Access (defense-in-depth)
+
+Cloudflare Access is a **progressive enhancement**, not a requirement. Without it, `/admin` is protected by the admin password you set during setup. If you want an additional identity layer (SSO, email allow-list, hardware keys), you can add an Access application at any time:
+
+1. In the Cloudflare dashboard, create an Access Application that covers `/admin` and `/setup`.
+2. When you next visit `/setup`, the CF Access JWT is detected and its identity claims are stored alongside your config — subsequent admin requests are verified against both the session cookie and the Access JWT.
+
+There is no feature flag to flip; the worker auto-detects the JWT header. Deployments that skip this step operate in password-only mode permanently with no loss of functionality.
 
 ## Local development
 
