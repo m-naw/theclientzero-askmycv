@@ -8,14 +8,14 @@
 import * as bcrypt from "bcryptjs";
 
 /** bcrypt work factor. 12 rounds balances security and latency for interactive login. */
-const BCRYPT_ROUNDS = 12;
+const saltRounds = 12;
 
 /**
  * Hash a plaintext password using bcrypt.
  * Returns the bcrypt hash string (includes salt).
  */
 export async function hashPassword(plaintext: string): Promise<string> {
-  return bcrypt.hash(plaintext, BCRYPT_ROUNDS);
+  return bcrypt.hash(plaintext, saltRounds);
 }
 
 /**
