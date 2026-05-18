@@ -137,9 +137,9 @@ describe("GET /admin — session-primary auth model", () => {
 
     const jwt = await mintAccessJwt({
       privateKey: kp.privateKey,
-      aud: cfg.access_aud,
-      iss: `https://${cfg.access_team_domain}`,
-      email: cfg.access_email,
+      aud: cfg.access_aud!,
+      iss: `https://${cfg.access_team_domain!}`,
+      email: cfg.access_email!,
     });
 
     const res = await runFetch(adminGetRequest({ sessionCookie, jwt }));
@@ -167,9 +167,9 @@ describe("GET /admin — session-primary auth model", () => {
 
     const jwt = await mintAccessJwt({
       privateKey: kp.privateKey,
-      aud: cfg.access_aud,
-      iss: `https://${cfg.access_team_domain}`,
-      email: cfg.access_email,
+      aud: cfg.access_aud!,
+      iss: `https://${cfg.access_team_domain!}`,
+      email: cfg.access_email!,
     });
 
     // No session cookie, JWT present — should still get 401

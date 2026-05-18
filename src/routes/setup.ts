@@ -1,18 +1,26 @@
 /**
  * POST /setup — handles the first-time setup form submission.
+ * GET  /setup — renders the setup form (no JWT required).
  *
- * Gate order (must remain in this order):
- *   1. JWT cryptographically verified via verifyAccessJwt → 403 on failure.
- *   2. Config already in KV → 403 (no re-setup).
- *   3. setup_window_start present AND > 30 min old → expired page.
- *   4. Required-field presence and bounds → 400.
+ * Gate order for POST (must remain in this order):
+ *   1. Config already in KV → 403 (no re-setup).
+ *   2. setup_window_start present AND > 30 min old → expired page (410).
+ *   3. Required-field presence and bounds → 400.
+ *   4. admin_password length 12..128 → 400 on violation.
  *   5. Anthropic key live test call → 400 on rejection.
- *   6. Persist StoredConfig to KV.
- *   7. 200 HTML with worker URL + admin URL.
+ *   6. bcrypt-hash admin_password, generate cookie_signing_secret, persist StoredConfig.
+ *   7. 303 redirect to /admin with Set-Cookie.
+ *
+ * CF Access JWT is OPTIONAL progressive enhancement:
+ *   - If cf-access-jwt-assertion header (or CF_Authorization cookie) is present,
+ *     it is verified and its claims (email, aud, team_domain) are stored in the
+ *     config, enabling CF Access layer on /admin.
+ *   - If absent, setup proceeds without Access claims and admin auth uses
+ *     the admin password + session cookie only.
  *
  * The Anthropic key is read only from the submitted form body, stored
- * only in KV (under the `config` key), and never echoed back into the
- * 200 HTML response.
+ * only in KV (under the `config` key), and never echoed back into any
+ * HTML response.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -29,14 +37,20 @@ import {
 import { verifyAccessJwt } from "../auth/access";
 import { resolveJwksSource } from "./jwks-source";
 import { renderExpiredSetup, renderSetupForm } from "../views";
-import { escapeHtml } from "../views/escape";
 import { readAccessJwt } from "../auth/access-token";
+import { hashPassword } from "../auth/password";
+import { createSessionCookie } from "../auth/session";
+import { ADMIN_PASSWORD_HASH_KEY } from "../types/auth";
 import type { Env } from "../env";
 
 const HTML_HEADERS = { "content-type": "text/html; charset=utf-8" } as const;
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" } as const;
 
 const MAX_BODY_BYTES = 100 * 1024; // 100 KiB
+
+/** Minimum and maximum length for admin_password. */
+const ADMIN_PASSWORD_MIN = 12;
+const ADMIN_PASSWORD_MAX = 128;
 
 function errorResponse(status: number, error: string, field?: string): Response {
   return new Response(JSON.stringify({ error, field }), {
@@ -59,50 +73,54 @@ function readField(form: FormData, name: string): string {
   return v;
 }
 
-export async function handlePostSetup(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
-  // ----- 1. JWT --------------------------------------------------------
-  const headerToken = readAccessJwt(request);
-  if (headerToken.length === 0) {
-    return errorResponse(403, "missing cf-access-jwt-assertion header");
+/**
+ * Attempt to verify an optional CF Access JWT from the request.
+ * Returns the identity triple on success, or null if no JWT is present.
+ * Throws if a JWT is present but verification fails.
+ */
+async function tryVerifyAccessJwt(
+  request: Request,
+  env: Env,
+): Promise<{ email: string; aud: string; team_domain: string } | null> {
+  const token = readAccessJwt(request);
+  if (token.length === 0) {
+    return null;
   }
-
   const source = await resolveJwksSource(env);
-  let identity;
-  try {
-    identity = await verifyAccessJwt(headerToken, source);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "jwt verification failed";
-    return errorResponse(403, `jwt verification failed: ${msg}`);
-  }
+  const identity = await verifyAccessJwt(token, source);
+  return {
+    email: identity.email,
+    aud: identity.aud,
+    team_domain: identity.team_domain,
+  };
+}
 
-  // ----- 2. config-exists gate ----------------------------------------
+export async function handlePostSetup(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  // ----- 1. config-exists gate ----------------------------------------
   const existing = await env.STATE.get("config");
   if (existing !== null) {
     return errorResponse(403, "already configured");
   }
 
-  // ----- 3. window-expired gate ---------------------------------------
+  // ----- 2. window-expired gate ---------------------------------------
   const windowRaw = await env.STATE.get("setup_window_start");
   if (windowRaw !== null) {
     const startMs = Number(windowRaw);
     if (Number.isFinite(startMs) && Date.now() - startMs > SETUP_WINDOW_MS) {
-      // Spec asks for the expired page when the owner attempts setup
-      // after the window. Return 403 status with the expired page body
-      // so HTTP semantics still indicate refusal.
       return new Response(renderExpiredSetup({ setupWindowStart: String(startMs) }), {
-        status: 403,
+        status: 410,
         headers: HTML_HEADERS,
       });
     }
   }
 
-  // ----- 3b. body-size guard ------------------------------------------
+  // ----- 2b. body-size guard ------------------------------------------
   const contentLengthSetup = request.headers.get("content-length");
   if (contentLengthSetup !== null && Number(contentLengthSetup) > MAX_BODY_BYTES) {
     return errorResponse(413, "request body too large");
   }
 
-  // ----- 4. form parsing + presence + bounds --------------------------
+  // ----- 3. form parsing + presence + bounds --------------------------
   let form: FormData;
   try {
     form = await request.formData();
@@ -136,6 +154,16 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
     );
   }
 
+  // ----- 4. admin_password validation ----------------------------------
+  const adminPassword = readField(form, "admin_password");
+  if (adminPassword.length < ADMIN_PASSWORD_MIN || adminPassword.length > ADMIN_PASSWORD_MAX) {
+    return errorResponse(
+      400,
+      `admin_password must be between ${ADMIN_PASSWORD_MIN} and ${ADMIN_PASSWORD_MAX} characters`,
+      "admin_password",
+    );
+  }
+
   // ----- 4b. Optional fields: model + accent_color --------------------
   const modelRaw = readField(form, "model");
   const model = (ALLOWED_MODELS as readonly string[]).includes(modelRaw)
@@ -165,64 +193,69 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
     return errorResponse(400, `anthropic_api_key rejected: ${msg}`, "anthropic_api_key");
   }
 
-  // ----- 6. persist StoredConfig --------------------------------------
+  // ----- optional CF Access JWT verification --------------------------
+  // If a JWT is present, verify it and capture claims for CF Access integration.
+  // If absent, proceed without CF Access (password-only admin auth mode).
+  let cfIdentity: { email: string; aud: string; team_domain: string } | null = null;
+  try {
+    cfIdentity = await tryVerifyAccessJwt(request, env);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "jwt verification failed";
+    return errorResponse(403, `jwt verification failed: ${msg}`);
+  }
+
+  // ----- 6. hash admin_password + generate cookie_signing_secret ------
+  const adminPasswordHash = await hashPassword(adminPassword);
+
+  // Generate 32-byte base64 cookie signing secret
+  const secretBytes = crypto.getRandomValues(new Uint8Array(32));
+  const cookieSigningSecret = btoa(String.fromCharCode(...secretBytes));
+
+  // ----- 6b. persist StoredConfig + admin credentials to KV ----------
   const config: StoredConfig = {
     display_name: parsed.display_name as string,
     headline: parsed.headline as string,
     cv_markdown: parsed.cv_markdown as string,
     anthropic_api_key: apiKey,
     daily_budget_usd: parsed.daily_budget_usd as number,
-    access_email: identity.email,
-    access_aud: identity.aud,
-    access_team_domain: identity.team_domain,
     setup_timestamp: Date.now(),
     model,
     accent_color: accentColor,
+    ...(cfIdentity
+      ? {
+          access_email: cfIdentity.email,
+          access_aud: cfIdentity.aud,
+          access_team_domain: cfIdentity.team_domain,
+        }
+      : {}),
   };
 
+  // Persist config and admin credentials atomically
   await env.STATE.put("config", JSON.stringify(config));
+  await env.STATE.put(ADMIN_PASSWORD_HASH_KEY, adminPasswordHash);
+  await env.STATE.put("cookie_signing_secret", cookieSigningSecret);
 
-  // ----- 7. success HTML ----------------------------------------------
+  // ----- 7. issue session cookie + 303 redirect to /admin -------------
+  const sessionCookieHeader = await createSessionCookie(env.STATE);
+
   const workerUrl = new URL(request.url);
-  const public_url = `${workerUrl.protocol}//${workerUrl.host}/`;
-  const admin_url = `${workerUrl.protocol}//${workerUrl.host}/admin`;
+  const adminUrl = `${workerUrl.protocol}//${workerUrl.host}/admin`;
 
-  // IMPORTANT: never include the Anthropic key in this body.
-  const html = `<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Setup complete — askmycv</title></head>
-<body>
-  <h1>Setup complete</h1>
-  <p>Your CV chat is live at <a href="${escapeHtml(public_url)}">${escapeHtml(public_url)}</a>.</p>
-  <p>Manage your configuration at <a href="${escapeHtml(admin_url)}">/admin</a>.</p>
-</body>
-</html>`;
-
-  return new Response(html, { status: 200, headers: HTML_HEADERS });
+  return new Response(null, {
+    status: 303,
+    headers: {
+      "Location": adminUrl,
+      "Set-Cookie": sessionCookieHeader,
+    },
+  });
 }
 
 /**
- * GET /setup — renders the setup form for an authenticated owner when no
- * config exists yet. After the owner clicks the "Continue" link on the
- * setup-instructions page, Access challenges them, then this handler
- * verifies the resulting JWT and shows the form. If config already exists
- * the owner is redirected to /admin (no re-setup path).
+ * GET /setup — renders the setup form. CF Access JWT is optional.
+ * If config already exists, redirect to /admin.
+ * If setup window has expired, show expired page.
  */
 export async function handleGetSetup(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
-  const token = readAccessJwt(request);
-  if (token.length === 0) {
-    return errorResponse(403, "missing cf-access-jwt-assertion header");
-  }
-
-  const source = await resolveJwksSource(env);
-  let identity;
-  try {
-    identity = await verifyAccessJwt(token, source);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "jwt verification failed";
-    return errorResponse(403, `jwt verification failed: ${msg}`);
-  }
-
   const existing = await env.STATE.get("config");
   if (existing !== null) {
     const url = new URL(request.url);
@@ -240,8 +273,20 @@ export async function handleGetSetup(request: Request, env: Env, _ctx: Execution
     }
   }
 
-  return new Response(renderSetupForm({ email: identity.email }), {
+  // Optional: try to extract email from CF Access JWT for personalised greeting
+  let email: string | undefined;
+  try {
+    const cfIdentity = await tryVerifyAccessJwt(request, env);
+    if (cfIdentity) {
+      email = cfIdentity.email;
+    }
+  } catch {
+    // JWT present but invalid — ignore for GET (don't block the form render)
+  }
+
+  return new Response(renderSetupForm({ email }), {
     status: 200,
     headers: HTML_HEADERS,
   });
 }
+
