@@ -7,8 +7,8 @@
 
 import * as bcrypt from "bcryptjs";
 
-/** bcrypt work factor. 10 rounds is standard for interactive login. */
-const BCRYPT_ROUNDS = 10;
+/** bcrypt work factor. 12 rounds balances security and latency for interactive login. */
+const BCRYPT_ROUNDS = 12;
 
 /**
  * Hash a plaintext password using bcrypt.

@@ -36,6 +36,8 @@ import type { Env } from "../env";
 const HTML_HEADERS = { "content-type": "text/html; charset=utf-8" } as const;
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" } as const;
 
+const MAX_BODY_BYTES = 100 * 1024; // 100 KiB
+
 function errorResponse(status: number, error: string, field?: string): Response {
   return new Response(JSON.stringify({ error, field }), {
     status,
@@ -92,6 +94,12 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
         headers: HTML_HEADERS,
       });
     }
+  }
+
+  // ----- 3b. body-size guard ------------------------------------------
+  const contentLengthSetup = request.headers.get("content-length");
+  if (contentLengthSetup !== null && Number(contentLengthSetup) > MAX_BODY_BYTES) {
+    return errorResponse(413, "request body too large");
   }
 
   // ----- 4. form parsing + presence + bounds --------------------------
@@ -176,8 +184,8 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
 
   // ----- 7. success HTML ----------------------------------------------
   const workerUrl = new URL(request.url);
-  const publicUrl = `${workerUrl.protocol}//${workerUrl.host}/`;
-  const adminUrl = `${workerUrl.protocol}//${workerUrl.host}/admin`;
+  const public_url = `${workerUrl.protocol}//${workerUrl.host}/`;
+  const admin_url = `${workerUrl.protocol}//${workerUrl.host}/admin`;
 
   // IMPORTANT: never include the Anthropic key in this body.
   const html = `<!doctype html>
@@ -185,8 +193,8 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
 <head><meta charset="utf-8"><title>Setup complete — askmycv</title></head>
 <body>
   <h1>Setup complete</h1>
-  <p>Your CV chat is live at <a href="${escapeHtml(publicUrl)}">${escapeHtml(publicUrl)}</a>.</p>
-  <p>Manage your configuration at <a href="${escapeHtml(adminUrl)}">/admin</a>.</p>
+  <p>Your CV chat is live at <a href="${escapeHtml(public_url)}">${escapeHtml(public_url)}</a>.</p>
+  <p>Manage your configuration at <a href="${escapeHtml(admin_url)}">/admin</a>.</p>
 </body>
 </html>`;
 

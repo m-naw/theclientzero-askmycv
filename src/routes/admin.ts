@@ -16,7 +16,7 @@ import {
   clearSessionCookie,
   verifySessionCookie,
 } from "../auth/session";
-import { verifyPassword, delayWrongPassword } from "../auth/password";
+import { verifyPassword } from "../auth/password";
 import { ADMIN_PASSWORD_HASH_KEY } from "../types/auth";
 import { checkLoginRateLimit } from "../abuse/rate-limit";
 import { renderAdminForm } from "../views/admin-form";
@@ -31,6 +31,8 @@ import type { Env } from "../env";
 
 const HTML_HEADERS = { "content-type": "text/html; charset=utf-8" } as const;
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" } as const;
+
+const MAX_BODY_BYTES = 100 * 1024; // 100 KiB
 
 function errorJson(status: number, error: string, field?: string): Response {
   return new Response(JSON.stringify({ error, field }), {
@@ -124,6 +126,12 @@ export async function handleAdminSave(
   const authError = await requireAdminAuth(request, env, config);
   if (authError !== null) {
     return authError;
+  }
+
+  // Body-size guard
+  const contentLengthSave = request.headers.get("content-length");
+  if (contentLengthSave !== null && Number(contentLengthSave) > MAX_BODY_BYTES) {
+    return errorJson(413, "request body too large");
   }
 
   // Parse form body
@@ -260,6 +268,12 @@ export async function handleAdminLogin(
     return new Response("Too many login attempts", { status: 429 });
   }
 
+  // Body-size guard
+  const contentLengthLogin = request.headers.get("content-length");
+  if (contentLengthLogin !== null && Number(contentLengthLogin) > MAX_BODY_BYTES) {
+    return new Response("request body too large", { status: 413 });
+  }
+
   // Parse body for `password` field — accept JSON or form-encoded
   let password = "";
   const contentType = request.headers.get("content-type") ?? "";
@@ -289,7 +303,7 @@ export async function handleAdminLogin(
   // Verify password
   const valid = await verifyPassword(password, storedHash);
   if (!valid) {
-    await delayWrongPassword();
+    await new Promise((r) => setTimeout(r, 500));
     return new Response("Invalid password", { status: 401 });
   }
 
@@ -313,6 +327,12 @@ export async function handleAdminReset(
   const session = await verifySessionCookie(request, env.STATE);
   if (session === null) {
     return new Response("Login required", { status: 401 });
+  }
+
+  // Body-size guard
+  const contentLengthReset = request.headers.get("content-length");
+  if (contentLengthReset !== null && Number(contentLengthReset) > MAX_BODY_BYTES) {
+    return new Response("request body too large", { status: 413 });
   }
 
   // Parse body for current_password and confirm
@@ -348,7 +368,7 @@ export async function handleAdminReset(
   // Verify current password
   const valid = await verifyPassword(current_password, storedHash);
   if (!valid) {
-    await delayWrongPassword();
+    await new Promise((r) => setTimeout(r, 500));
     return new Response("Invalid password", { status: 401 });
   }
 
