@@ -366,3 +366,23 @@ entries:
       - src/routes/admin.ts
       - src/__tests__/setup/setup-acceptance.test.ts
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G6
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-18T19:28:09.565Z
+    summary: "Goal G6: Inline recovery pages with verified Cloudflare dashboard
+      navigation completed."
+    findings:
+      - category: observation
+        text: All 11 criteria are MET. The error-pages.ts contains all required literals
+          (dash.cloudflare.com, setup_window_start, STATE, Delete). The
+          src/views directory contains admin_password_hash (in login.ts) and a
+          details element. No docs/ anchors exist in error-pages.ts. The
+          setup.ts route includes recovery_summary and excludes recovery_url.
+          All 272 tests pass and the build succeeds cleanly.
+    affected_files:
+      - src/views/error-pages.ts
+      - src/views/setup-instructions.ts
+      - src/routes/setup.ts
+      - src/routes/admin.ts
+      - src/__tests__/setup/setup-acceptance.test.ts
+    baseline_after_goal: goal-completion gate passed (build + tests green)
