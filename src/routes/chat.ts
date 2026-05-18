@@ -36,8 +36,14 @@ import { isGarbageInput } from "../abuse/input-guard";
 import { checkAndIncrement } from "../abuse/rate-limit";
 import { utcDateKey, readSpend, addSpend } from "../budget/spend";
 import { computeCostUsd } from "../pricing/index";
+// F11: consume the captured Anthropic credit-error realShape fixture from G1.
+// The fixture is the authoritative body shape for credit-exhaustion responses;
+// matching the canonical message exactly (plus loose substring) keeps detection
+// resilient to upstream wording drift.
+import creditErrorShape from "../../references/anthropic-messages-error.json";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" } as const;
+const CREDIT_ERROR_MESSAGE: string = creditErrorShape.error.message;
 const SSE_HEADERS = {
   "content-type": "text/event-stream; charset=utf-8",
   "cache-control": "no-cache, no-transform",
@@ -211,7 +217,10 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
         const parsed: unknown = JSON.parse(text);
         const msg =
           (parsed as { error?: { message?: unknown } } | null)?.error?.message;
-        if (typeof msg === "string" && msg.toLowerCase().includes("credit")) {
+        if (
+          typeof msg === "string" &&
+          (msg === CREDIT_ERROR_MESSAGE || msg.toLowerCase().includes("credit"))
+        ) {
           reason = "credits";
         }
       }
