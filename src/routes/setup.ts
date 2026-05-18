@@ -107,10 +107,19 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
   if (windowRaw !== null) {
     const startMs = Number(windowRaw);
     if (Number.isFinite(startMs) && Date.now() - startMs > SETUP_WINDOW_MS) {
-      return new Response(renderExpiredSetup({ setupWindowStart: String(startMs) }), {
-        status: 410,
-        headers: HTML_HEADERS,
-      });
+      const expiredAt = new Date(startMs + SETUP_WINDOW_MS).toISOString();
+      return new Response(
+        JSON.stringify({
+          error: "setup window expired",
+          expired_at: expiredAt,
+          recovery_summary:
+            "Delete the setup_window_start key from the STATE KV namespace at dash.cloudflare.com to open a new 10-minute setup window.",
+        }),
+        {
+          status: 403,
+          headers: JSON_HEADERS,
+        },
+      );
     }
   }
 

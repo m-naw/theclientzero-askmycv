@@ -355,11 +355,11 @@ describe("Setup acceptance tests (spec §12)", () => {
   // ---------------------------------------------------------------------
   // Test 5: Setup window expiration and recovery
   // ---------------------------------------------------------------------
-  it("Test 5: expired window renders expired page; POST /setup returns 410; deletion recovers", async () => {
+  it("Test 5: expired window renders expired page; POST /setup returns 403 JSON with expired_at and recovery_summary; deletion recovers", async () => {
     const kp = await createJwtHarness();
     await getEnv().STATE.put(TEST_JWKS_KV_KEY, JSON.stringify(kp.jwksDocument));
 
-    // Pre-set setup_window_start to 31 minutes ago.
+    // Pre-set setup_window_start to 11 minutes ago (>600s = expired).
     const oldStart = Date.now() - (SETUP_WINDOW_MS + 60_000);
     await getEnv().STATE.put("setup_window_start", String(oldStart));
 
@@ -368,10 +368,22 @@ describe("Setup acceptance tests (spec §12)", () => {
     expect(expiredHtml).toContain("setup_window_start");
     expect(expiredHtml.toLowerCase()).toContain("expired");
 
-    // (2) POST /setup with valid body and expired window → 410
+    // (2) POST /setup with valid body and expired window → 403 JSON
     mockAnthropicOk();
     const r = await runFetch(setupRequest(null, validFormBody()));
-    expect(r.status).toBe(410);
+    expect(r.status).toBe(403);
+    expect(r.headers.get("content-type")).toContain("application/json");
+
+    const json = await r.json() as Record<string, unknown>;
+    // Must have error, expired_at (ISO8601), recovery_summary (non-empty string)
+    expect(typeof json.error).toBe("string");
+    expect(typeof json.expired_at).toBe("string");
+    // Validate ISO8601 format
+    expect(new Date(json.expired_at as string).toISOString()).toBe(json.expired_at);
+    expect(typeof json.recovery_summary).toBe("string");
+    expect((json.recovery_summary as string).length).toBeGreaterThan(0);
+    // Must NOT have recovery_url
+    expect(json.recovery_url).toBeUndefined();
 
     // (3) Delete setup_window_start
     await getEnv().STATE.delete("setup_window_start");

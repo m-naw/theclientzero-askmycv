@@ -32,6 +32,7 @@ export function renderLoginForm(opts: LoginFormProps = {}): string {
     : "";
 
   const body = `
+<!-- Citation: F19 — admin login forgot-password expandable (renderLoginForm) -->
 <main class="centered-form">
   <h1 class="form-title">Admin Login</h1>
   ${errorHtml}
@@ -46,6 +47,21 @@ export function renderLoginForm(opts: LoginFormProps = {}): string {
     })}
     ${button({ label: "Sign in", type: "submit", variant: "primary" })}
   </form>
+  <details class="forgot-password">
+    <summary>Forgot password</summary>
+    <div class="forgot-password-content">
+      <p>Admin passwords cannot be reset via email. To regain access, reset the stored credential in Cloudflare KV:</p>
+      <ol>
+        <li>Open <a href="https://dash.cloudflare.com" rel="noopener noreferrer">dash.cloudflare.com</a> and sign in to your Cloudflare account.</li>
+        <li>In the left sidebar, navigate to <strong>Workers &amp; Pages → KV</strong>.</li>
+        <li>Locate the <strong>STATE</strong> KV namespace bound to this Worker.</li>
+        <li>Inside the STATE namespace, find the entry whose key is <code>admin_password_hash</code>.</li>
+        <li>Select the <code>admin_password_hash</code> entry and click <strong>Delete</strong> to remove it.</li>
+        <li>Also Delete the <code>config</code> entry from the STATE namespace to reset the Worker to setup mode.</li>
+        <li>Return to the Worker root URL and complete the setup form again with a new admin password.</li>
+      </ol>
+    </div>
+  </details>
 </main>
 `;
 
