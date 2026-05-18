@@ -47,6 +47,10 @@ export interface StoredConfig {
   model?: string;
   /** Page accent color (CSS color literal — hex, named, or otherwise). Optional. */
   accent_color?: string;
+  /** UI color scheme. Optional; defaults to 'light'. */
+  theme?: 'light' | 'dark';
+  /** Bcrypt/argon2id hash of the admin password. KV-only; never echoed. */
+  admin_password_hash?: string;
 }
 
 /** Models the setup/admin forms expose. Other values are rejected at save. */

@@ -43,7 +43,7 @@ export function renderChatPage(props: ChatPageProps): string {
   ${suggestions}
 </section>
 
-<section class="message-list" aria-live="polite" aria-label="Conversation"></section>
+<section class="message-list" role="log" aria-live="polite" aria-label="Conversation"></section>
 
 <form class="composer-form" autocomplete="off">
   <div class="composer">

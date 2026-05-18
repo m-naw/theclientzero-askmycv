@@ -15,6 +15,8 @@ export interface SetupFormFields {
   pdf_cv_url?: string;
   accent_color?: string;
   model?: string;
+  admin_password?: string;
+  theme?: 'light' | 'dark';
   daily_budget_usd?: number | string;
   max_msgs_per_hour?: number | string;
 }
@@ -57,6 +59,21 @@ export function renderConfigForm(opts: FormVariantOptions): string {
       placeholder: opts.apiKeyRequired ? "sk-ant-…" : "leave blank to keep existing",
       hint: opts.apiKeyHint,
       autocomplete: "off",
+    }),
+    `<label class="field">
+  <span class="field-label">Theme</span>
+  <select class="input" name="theme" required>
+    <option value="light"${(p.theme ?? 'light') === 'light' ? ' selected' : ''}>Light</option>
+    <option value="dark"${p.theme === 'dark' ? ' selected' : ''}>Dark</option>
+  </select>
+</label>`,
+    input({
+      name: 'admin_password',
+      label: 'Admin password',
+      type: 'password',
+      required: true,
+      hint: '12–128 characters',
+      autocomplete: 'off',
     }),
     textarea({
       name: "cv_markdown",
