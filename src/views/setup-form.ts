@@ -67,14 +67,11 @@ export function renderConfigForm(opts: FormVariantOptions): string {
     <option value="dark"${p.theme === 'dark' ? ' selected' : ''}>Dark</option>
   </select>
 </label>`,
-    input({
-      name: 'admin_password',
-      label: 'Admin password',
-      type: 'password',
-      required: true,
-      hint: '12–128 characters',
-      autocomplete: 'off',
-    }),
+    `<label class="field">
+  <span class="field-label">Admin password</span>
+  <input class="input" type="password" name="admin_password" required autocomplete="off" placeholder="12–128 characters" />
+  <span class="field-hint">12–128 characters</span>
+</label>`,
     textarea({
       name: "cv_markdown",
       label: "CV in markdown",
