@@ -86,7 +86,7 @@ ${errorBanner("The 10-minute first-time setup window has expired.")}
   ${expiredAtHtml}
   <h2>Recovery steps</h2>
   <ol>
-    <li>Open <a href="https://dash.cloudflare.com" rel="noopener noreferrer">dash.cloudflare.com</a> and sign in to your Cloudflare account.</li>
+    <li>Open <a href="https://dash.cloudflare.com" rel="noopener noreferrer">Cloudflare dashboard</a> and sign in to your Cloudflare account.</li>
     <li>In the left sidebar, navigate to <strong>Workers &amp; Pages → KV</strong>.</li>
     <li>Locate the <strong>STATE</strong> KV namespace that is bound to this Worker.</li>
     <li>Inside the STATE namespace, find the entry whose key is <code>setup_window_start</code>.</li>
