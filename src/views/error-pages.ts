@@ -1,3 +1,4 @@
+import { SETUP_WINDOW_MS } from "../state/machine";
 import { TOKENS } from "./design-tokens";
 import { renderLayout } from "./layout";
 import { errorBanner } from "./primitives/index";
@@ -66,7 +67,7 @@ export function renderExpiredSetup(props: ExpiredSetupProps = {}): string {
   if (props.setupWindowStart) {
     const startMs = Number(props.setupWindowStart);
     if (Number.isFinite(startMs)) {
-      const expiredAt = new Date(startMs + 600_000).toISOString();
+      const expiredAt = new Date(startMs + SETUP_WINDOW_MS).toISOString();
       expiredAtHtml = `<p class="muted">Window expired at: <code>${escapeHtml(expiredAt)}</code> UTC (ISO 8601).</p>`;
     }
   }
