@@ -301,7 +301,7 @@ describe("isSetupWindowExpired", () => {
 // ---------------------------------------------------------------------------
 
 describe("SETUP_WINDOW_MS constant", () => {
-  it("equals 30 minutes in milliseconds", () => {
-    expect(SETUP_WINDOW_MS).toBe(30 * 60 * 1000);
+  it("equals 10 minutes in milliseconds", () => {
+    expect(SETUP_WINDOW_MS).toBe(600_000);
   });
 });

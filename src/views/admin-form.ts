@@ -28,7 +28,7 @@ export function renderAdminForm(props: AdminFormProps): string {
   // Danger Zone section before the closing </body> tag.
   const dangerZone = `
 <section class="card" style="border-color: var(--color-error);">
-  <h2 style="color: var(--color-error);">Danger Zone</h2>
+  <h2 style="color: var(--color-error);">Danger zone</h2>
   <p class="muted">Permanently deletes all configuration, API key, password, and session secrets from KV. This cannot be undone.</p>
   <form method="POST" action="/admin/reset" autocomplete="off">
     ${input({

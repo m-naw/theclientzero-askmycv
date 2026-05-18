@@ -48,7 +48,7 @@ function errorResponse(status: number, error: string, field?: string): Response 
 interface ParsedFormBody {
   display_name: string;
   headline: string;
-  cv_markdown: string;
+  cv_markdown: string; // max 50_000 chars (CV_MAX_LENGTH)
   anthropic_api_key: string;
   daily_budget_usd: number;
 }
