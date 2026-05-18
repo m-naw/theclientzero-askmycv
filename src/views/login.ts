@@ -33,6 +33,7 @@ export function renderLoginForm(opts: LoginFormProps = {}): string {
 
   const body = `
 <!-- Citation: F19 — admin login forgot-password expandable (renderLoginForm) -->
+<!-- Source: https://developers.cloudflare.com/kv/ verified 2026-05-18 -->
 <main class="centered-form">
   <h1 class="form-title">Admin Login</h1>
   ${errorHtml}

@@ -73,6 +73,7 @@ export function renderExpiredSetup(props: ExpiredSetupProps = {}): string {
 
   const body = `
 <!-- Citation: F2 — expired setup window inline recovery (renderExpiredSetup) -->
+<!-- Source: https://developers.cloudflare.com/kv/ verified 2026-05-18 -->
 <header><h1>Setup window expired</h1></header>
 ${errorBanner("The 10-minute first-time setup window has expired.")}
 <section class="card">
