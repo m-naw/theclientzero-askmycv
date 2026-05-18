@@ -1,0 +1,9 @@
+{
+  "description": "Captured Anthropic API error response shape for insufficient credit balance. HTTP status 400. Used by F11 to distinguish credit-exhaustion from generic upstream failures.",
+  "http_status": 400,
+  "type": "error",
+  "error": {
+    "type": "invalid_request_error",
+    "message": "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."
+  }
+}
