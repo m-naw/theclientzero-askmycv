@@ -344,3 +344,25 @@ entries:
       - src/routes/admin.ts
       - src/__tests__/setup/setup-acceptance.test.ts
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G6
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-18T19:14:15.032Z
+    summary: "Goal G6: Inline recovery pages with verified Cloudflare dashboard
+      navigation completed."
+    findings:
+      - category: observation
+        text: "All 11 criteria are MET. The followup sprint resolved the 27 test
+          failures from the previous review cycle — the test suite now reports
+          272 passing tests across 35 files. All structural criteria
+          (error-pages.ts literals, src/views directory presence of
+          admin_password_hash and details elements, absence of docs/ anchors in
+          error-pages.ts, recovery_summary present and recovery_url absent in
+          setup.ts) are confirmed by direct grep evidence. pnpm build succeeds
+          cleanly. Verdict: pass."
+    affected_files:
+      - src/views/error-pages.ts
+      - src/views/setup-instructions.ts
+      - src/routes/setup.ts
+      - src/routes/admin.ts
+      - src/__tests__/setup/setup-acceptance.test.ts
+    baseline_after_goal: goal-completion gate passed (build + tests green)
