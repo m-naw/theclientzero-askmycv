@@ -5,6 +5,19 @@
  * Key expires at the next hour boundary so stale counters self-prune.
  */
 
+// ---------------------------------------------------------------------------
+// Login rate-limit constants
+// ---------------------------------------------------------------------------
+
+/** KV key prefix for login attempt rate limiting. Format: ratelimit:login:<ip> */
+export const LOGIN_RATE_LIMIT_PREFIX = "ratelimit:login:";
+
+/** Maximum login attempts allowed per IP within the login rate-limit window. */
+export const LOGIN_RATE_LIMIT_MAX = 10;
+
+/** Login rate-limit window duration in seconds (1 hour). */
+export const LOGIN_RATE_LIMIT_WINDOW_SECONDS = 3600;
+
 function hourKey(ip: string, now: Date): string {
   const date = now.toISOString().slice(0, 10); // YYYY-MM-DD
   const hour = now.getUTCHours().toString().padStart(2, "0");

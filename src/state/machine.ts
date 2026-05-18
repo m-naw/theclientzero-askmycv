@@ -13,8 +13,8 @@
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Setup window duration: 30 minutes in milliseconds. */
-export const SETUP_WINDOW_MS = 30 * 60 * 1_000;
+/** Setup window duration: 10 minutes in milliseconds. */
+export const SETUP_WINDOW_MS = 600_000;
 
 // ---------------------------------------------------------------------------
 // Types
