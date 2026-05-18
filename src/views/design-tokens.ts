@@ -67,7 +67,7 @@ export function toCssVars(accentColor?: string): string {
   --font-base: 1rem;
   --font-lg: 1.25rem;
   --font-xl: 2rem;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --color-bg: #fafaf7;
   --color-surface: #ffffff;
@@ -90,6 +90,14 @@ export function toCssVars(accentColor?: string): string {
 
   --motion-fast: 120ms ease-out;
   --motion-normal: 220ms ease-out;
+}
+
+[data-theme="dark"] {
+  --color-bg: #181613;
+  --color-surface: #242220;
+  --color-text: #ededeb;
+  --color-text-muted: #9b9b94;
+  --color-border: #3a3834;
 }`;
 }
 
@@ -105,14 +113,14 @@ html, body { margin: 0; padding: 0; }
 body {
   background: var(--color-bg);
   color: var(--color-text);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: 'Instrument Sans', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: var(--font-base);
   line-height: 1.5;
   min-height: 100vh;
 }
 .page { max-width: 720px; margin: 0 auto; padding: var(--space-xl) var(--space-md); }
-h1 { font-size: var(--font-xl); margin: 0 0 var(--space-sm); }
-h2 { font-size: var(--font-lg); margin: 0 0 var(--space-sm); }
+h1 { font-size: var(--font-xl); margin: 0 0 var(--space-sm); font-family: 'Fraunces', serif; }
+h2 { font-size: var(--font-lg); margin: 0 0 var(--space-sm); font-family: 'Fraunces', serif; }
 p  { margin: 0 0 var(--space-md); }
 a  { color: var(--color-accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
