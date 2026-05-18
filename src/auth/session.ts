@@ -178,3 +178,92 @@ export function buildClearCookieHeader(): string {
     "SameSite=Lax",
   ].join("; ");
 }
+
+// ---------------------------------------------------------------------------
+// High-level KV-backed session helpers
+// ---------------------------------------------------------------------------
+
+/** KV key under which the cookie-signing secret is stored. */
+const SIGNING_SECRET_KEY = "cookie_signing_secret";
+
+/**
+ * Get or generate the HMAC signing secret from KV.
+ * If no secret exists, generates a 32-byte random secret and stores it.
+ */
+async function getOrCreateSigningSecret(kv: KVNamespace): Promise<string> {
+  const existing = await kv.get(SIGNING_SECRET_KEY);
+  if (existing !== null && existing.length > 0) {
+    return existing;
+  }
+  // Generate a new 32-byte random secret, stored as hex
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const hex = Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  await kv.put(SIGNING_SECRET_KEY, hex);
+  return hex;
+}
+
+/**
+ * Read the cookie value for SESSION_COOKIE_NAME from the request Cookie header.
+ * Returns null if not present.
+ */
+function readSessionCookieValue(request: Request): string | null {
+  const cookieHeader = request.headers.get("cookie");
+  if (!cookieHeader) return null;
+  for (const part of cookieHeader.split(";")) {
+    const trimmed = part.trim();
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx === -1) continue;
+    const name = trimmed.slice(0, eqIdx).trim();
+    if (name === SESSION_COOKIE_NAME) {
+      return trimmed.slice(eqIdx + 1).trim();
+    }
+  }
+  return null;
+}
+
+/**
+ * Create a new signed admin session cookie.
+ * Generates a fresh session token, signs it, and returns the Set-Cookie header value.
+ */
+export async function createSessionCookie(kv: KVNamespace): Promise<string> {
+  const secret = await getOrCreateSigningSecret(kv);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const payload: AdminSessionPayload = {
+    sub: "admin",
+    iat: nowSeconds,
+    exp: nowSeconds + SESSION_TTL_SECONDS,
+  };
+  const token = await signSession(payload, secret);
+  return buildSetCookieHeader(token);
+}
+
+/**
+ * Return a Set-Cookie header value that clears the session cookie.
+ * Does not require KV access — just produces the clearing header.
+ */
+export function clearSessionCookie(): string {
+  return buildClearCookieHeader();
+}
+
+/**
+ * Verify the session cookie from the request.
+ * Returns the parsed AdminSessionPayload on success, or null if missing/invalid/expired.
+ */
+export async function verifySessionCookie(
+  request: Request,
+  kv: KVNamespace,
+): Promise<AdminSessionPayload | null> {
+  const cookieValue = readSessionCookieValue(request);
+  if (cookieValue === null) return null;
+
+  const secret = await kv.get(SIGNING_SECRET_KEY);
+  if (secret === null || secret.length === 0) return null;
+
+  try {
+    return await verifySession(cookieValue, secret);
+  } catch {
+    return null;
+  }
+}
