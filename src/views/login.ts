@@ -5,9 +5,12 @@
  * The form POSTs to /login. The Anthropic API key is never present here.
  */
 
+import { TOKENS } from "./design-tokens";
 import { renderLayout } from "./layout";
 import { input, button } from "./primitives/index";
 import { escapeHtml } from "./escape";
+
+void TOKENS;
 
 export interface LoginFormProps {
   /** Optional error message to display above the form. */

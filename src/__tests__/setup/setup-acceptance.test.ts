@@ -201,7 +201,7 @@ describe("Setup acceptance tests (spec §12)", () => {
 
     const postRes = await runFetch(setupRequest(null, validFormBody()));
     expect(postRes.status).toBe(303);
-    expect(postRes.headers.get("Location")).toContain("/admin");
+    expect(postRes.headers.get("Location")).toContain("/");
 
     const setCookie = postRes.headers.get("Set-Cookie") ?? "";
     expect(setCookie).toContain("HttpOnly");
@@ -249,7 +249,7 @@ describe("Setup acceptance tests (spec §12)", () => {
     // (3) POST /setup with JWT and valid body
     const postRes = await runFetch(setupRequest(jwt, validFormBody()));
     expect(postRes.status).toBe(303);
-    expect(postRes.headers.get("Location")).toContain("/admin");
+    expect(postRes.headers.get("Location")).toContain("/");
 
     const setCookie = postRes.headers.get("Set-Cookie") ?? "";
     expect(setCookie).toContain("HttpOnly");
