@@ -120,6 +120,22 @@ describe("Setup acceptance tests (spec §12)", () => {
   });
 
   // ---------------------------------------------------------------------
+  // Timing precision check: setup_window_start is recorded within 5000ms
+  // ---------------------------------------------------------------------
+  it("setup_window_start is recorded within 5000 ms of the GET / request", async () => {
+    const before = Date.now();
+    await runFetch(rootRequest());
+    const after = Date.now();
+
+    const stored = await getEnv().STATE.get("setup_window_start");
+    expect(stored).not.toBeNull();
+    const ts = Number(stored);
+    // setup_window_start must be within 5_000 ms of when the request was made
+    expect(ts).toBeGreaterThanOrEqual(before - 5_000);
+    expect(ts).toBeLessThanOrEqual(after + 5_000);
+  });
+
+  // ---------------------------------------------------------------------
   // Test 1: Cold-start state machine
   // ---------------------------------------------------------------------
   it("Test 1: cold-start GET / serves instructions, records setup_window_start, POST /setup without JWT is 403", async () => {

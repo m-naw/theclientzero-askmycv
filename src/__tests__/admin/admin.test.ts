@@ -163,7 +163,10 @@ describe("POST /admin/login", () => {
 // GET /admin with session cookie
 // ===========================================================================
 
-describe("GET /admin with session cookie", () => {
+// This describe block documents the auth surface: admin route with no JWT
+// (session cookie only) is accepted when Cloudflare Access is not configured,
+// and rejected when access_email is set (CF Access JWT becomes required).
+describe("admin route with no JWT — session cookie only", () => {
   beforeEach(async () => {
     await clearKv();
     await seedHashedPassword();
