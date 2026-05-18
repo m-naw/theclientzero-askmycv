@@ -269,3 +269,31 @@ entries:
       - src/__tests__/admin/admin.test.ts
       - src/__tests__/setup/setup-acceptance.test.ts
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G3
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-18T03:38:31.560Z
+    summary: "Goal G3: Admin password authentication, admin panel additions, setup
+      window tightening completed."
+    findings:
+      - category: observation
+        text: All 26 criteria are MET. The iteration delivers password-primary admin
+          authentication with bcryptjs (saltRounds=12), HMAC-SHA256 signed
+          session cookies (askmycv_admin_session, HttpOnly, SameSite=Lax), 500ms
+          anti-bruteforce delay, DELETE ALL CONFIG reset endpoint, 600-second
+          setup window, rate-limit infrastructure, danger-zone UI, and
+          docs/specs/auth-surface.md. All 240 tests pass, build and typecheck
+          complete cleanly, and the contract-parity script exits 0.
+    affected_files:
+      - src/auth/access.ts
+      - src/auth/access-token.ts
+      - src/auth/identity.ts
+      - src/auth/jwt.ts
+      - src/routes/setup.ts
+      - src/routes/admin.ts
+      - src/state/machine.ts
+      - src/types/config.ts
+      - src/abuse/rate-limit.ts
+      - package.json
+      - src/__tests__/admin/admin.test.ts
+      - src/__tests__/setup/setup-acceptance.test.ts
+    baseline_after_goal: goal-completion gate passed (build + tests green)
