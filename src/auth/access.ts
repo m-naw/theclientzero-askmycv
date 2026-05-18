@@ -19,6 +19,7 @@ import {
   type VerifiedPayload,
 } from "./jwt";
 import { verifySessionCookie } from "./session";
+import { resolveJwksSource } from "../routes/jwks-source";
 import type { StoredConfig } from "../types/config";
 import type { Env } from "../env";
 
@@ -123,7 +124,19 @@ export async function requireAdminAuth(
       return new Response("Access JWT invalid: missing token", { status: 403 });
     }
     try {
-      await verifyAccessJwt(jwt, {});
+      const jwksSource = await resolveJwksSource(env);
+      const identity = await verifyAccessJwt(jwt, {
+        ...jwksSource,
+        audience: config.access_aud,
+      });
+      // Verify team domain matches config
+      if (
+        config.access_team_domain &&
+        config.access_team_domain.length > 0 &&
+        identity.team_domain !== config.access_team_domain
+      ) {
+        return new Response("Access JWT invalid: team_domain_mismatch", { status: 403 });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "unknown error";
       return new Response(`Access JWT invalid: ${msg}`, { status: 403 });
