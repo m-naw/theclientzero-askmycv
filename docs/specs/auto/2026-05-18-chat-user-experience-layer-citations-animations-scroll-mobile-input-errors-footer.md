@@ -1,83 +1,158 @@
-## Problem Statement
+# G5 Specification: Chat User Experience Layer
 
-The chat page has a working streaming skeleton but is missing the coherent UX layer required for production: client-side markdown stripping is absent (asterisks and backticks leak into rendered DOM text); the citation token `[cv]` is rendered with class `citation-chip` rather than the spec-target `citation-badge`; no @keyframes animations exist for typing indicator or message entrance; no auto-scroll control; no mobile keyboard survival strategy; no keyboard shortcuts or send-button disabled state; all Anthropic upstream failures map to the same generic error; no footer with MAINTAINER_* attribution constants; no AGPL-3.0 Section 7(b) clause in LICENSE.
+## Overview
 
-## Root Cause of Prior Iteration Failures (Attempts 1-3)
+G5 implements the full client-side UX layer for the askmycv chat interface, covering seven discrete features: markdown stripping and citation-badge rendering (F6), streaming animations (F7), auto-scroll (F8), mobile-responsive layout (F9), keyboard UX (F10), credit-distinct error handling (F11), and footer attribution (F14).
 
-All three prior attempts failed with 'Strategy loop error: consumed artifact anthropic-messages-error was not found'. The artifact resolution check reads goal metadata and runs before any sprint executor writes to the workspace. The fix (executed as prerequisite to this spec): created `references/anthropic-messages-error.json` with the Anthropic credit-error shape derived from behavior scenario 3 (HTTP 400, `invalid_request_error`, message contains 'credit') and committed it to the branch. The strategy loop will now find the artifact at its expected path.
+All CSS timing literals (1.4s, 400ms) must live in `design-tokens.ts` as CSS custom properties; raw values must not appear elsewhere. The `citation-chip` class must be preserved for backward compatibility with existing tests.
 
-## Current Behavior
+---
 
-- `src/views/client/streaming.ts`: IIFE with SSE pump. `renderInto()` splits on `[cv]` and creates `citation-chip` spans. No markdown stripping. No partial-match preservation regex. No typing indicator DOM. No animations. No auto-scroll. No keyboard shortcuts. No send-button disabled state.
-- `src/views/design-tokens.ts` `baseStyles()`: defines `.citation-chip` CSS. No `@keyframes`. No typing timing vars in `toCssVars()`. No mobile sticky rules. No `prefers-reduced-motion` block.
-- `src/views/chat-page.ts:46`: `role="log" aria-live="polite"` already present (done_when criterion already met). No MAINTAINER_* constants. No `<footer>` element.
-- `src/routes/chat.ts:202-207`: All upstream non-OK responses return HTTP 502 `{error:'upstream_unavailable'}`. No credit-balance distinction.
-- `LICENSE`: Vanilla AGPL-3.0. No Section 7(b) additional terms.
-- `references/anthropic-messages-error.json`: Now exists (created as prerequisite to this iteration) with the Anthropic credit-error shape: HTTP 400, `invalid_request_error`, message 'Your credit balance is too low...'.
+## Feature Specifications
 
-## Proposed Changes
+### F6 — Markdown Stripping + Citation-Badge Pipeline
 
-### Sprint 1: UI Foundation
+**File:** `src/views/client/streaming.ts`
 
-**Task 1 — Design Context (ui-analysis):** Detect design resources: Figma URLs, tailwind.config.ts, or other design systems. Write `docs/artifacts/design-context.md` recording that the design system is `src/views/design-tokens.ts` CSS custom properties with no external design tool.
+The `renderInto(node, text)` function must:
+1. Strip markdown before rendering: remove `**bold**`, `*italic*`, `` `code` ``, `# heading`, `- list item` patterns using a `stripMarkdown(text: string): string` helper that applies regex replacements.
+2. Buffer partial `[cv]` tokens at the end of accumulator: use regex `/\[(?:c(?:v)?)?$/` to detect a partial citation token in progress and withhold that suffix from rendering until the next chunk completes or closes it.
+3. Split the stripped text on `[cv]` (full match) to produce alternating text/badge nodes.
+4. For each `[cv]` split: create a `<span class="citation-chip citation-badge">` element (keeping `citation-chip` for compat, adding `citation-badge` as additional class).
+5. Use `document.createTextNode()` for all plain text segments — no `innerHTML` on streamed model output.
 
-**Task 2 — Animation tokens and @keyframes (design-tokens.ts):**
-- In `toCssVars()`: add `--typing-duration: 1.4s` and `--bubble-enter-duration: 400ms`.
-- In `baseStyles()`: add `@keyframes typing-dot { 0%,80%,100%{transform:scale(0)} 40%{transform:scale(1)} }` and `@keyframes bubble-enter { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }`.
-- Add `.typing-indicator` rule (flex, 4px gap) with child `.dot` elements using `animation: typing-dot var(--typing-duration) infinite` and delays `0s`, `0.2s`, `0.4s`.
-- Add `.message { animation: bubble-enter var(--bubble-enter-duration) ease-out both }` to existing `.message` rule.
-- Add `@media (prefers-reduced-motion: reduce) { .typing-indicator *, .message { animation: none } }`.
+### F7 — Streaming Animations
 
-**Task 3 — citation-badge CSS and mobile CSS (design-tokens.ts):**
-- Add `.citation-badge` CSS rule in `baseStyles()` with same visual properties as `.citation-chip` (accent background, mono font, inline-block, border-radius, padding). Keep `.citation-chip` intact for backward compat with existing tests.
-- Add `min-height: 44px; touch-action: manipulation` to `.btn` and `.composer .textarea` rules.
-- Add `.composer-form { position: sticky; bottom: 0; background: var(--color-bg); padding: var(--space-sm) 0; z-index: 10; }`.
-- Update body `min-height` to `100svh` with `100dvh` fallback for mobile keyboard survival.
-- Add `@media (max-width: 540px) { .composer { flex-direction: column; } .anchors { flex-direction: column; } }`.
-- Add `.page-footer { margin-top: var(--space-xl); padding-top: var(--space-md); border-top: 1px solid var(--color-border); font-size: var(--font-sm); color: var(--color-text-muted); display: flex; flex-wrap: wrap; gap: var(--space-md); }`.
+**File:** `src/views/design-tokens.ts`
 
-**Task 4 — MAINTAINER_* constants and footer (chat-page.ts):**
-- Declare module-scope: `const MAINTAINER_GH_USERNAME = 'm-naw'`, `const MAINTAINER_REPO_NAME = 'theclientzero-askmycv'`, `const MAINTAINER_X_HANDLE = 'TheClientZero'`.
-- Add optional `x_url?: string` to `ChatPageProps`.
-- Render `<footer class="page-footer">` containing: (a) canonical-repo anchor `<a href="https://github.com/${MAINTAINER_GH_USERNAME}/${MAINTAINER_REPO_NAME}">askmycv</a>`; (b) X anchor `<a href="https://x.com/${MAINTAINER_X_HANDLE}">@${MAINTAINER_X_HANDLE}</a>`; (c) conditional 'Deployed by display_name' link when `linkedin_url` or `x_url` is set; no Deployed-by element when neither is set.
-- Update `src/test/views/chat-page.test.ts` to assert footer links.
+Add to `toCssVars()` output:
+- `--typing-duration: 1.4s`
+- `--bubble-enter-duration: 400ms`
 
-### Sprint 2: Chat UX Logic + Backend + Legal
+Add to `baseStyles()` output:
+- `@keyframes typing-dot` — three-dot pulsing indicator:
+  - Dots animate opacity 0.2 → 1 → 0.2 over `var(--typing-duration)` with `infinite` iteration.
+  - Three `.dot` children get `animation-delay: 0s`, `0.2s`, `0.4s` respectively.
+- `@keyframes bubble-enter` — message fade-up on arrival:
+  - `from { opacity: 0; transform: translateY(8px); }`
+  - `to { opacity: 1; transform: translateY(0); }`
+  - Duration: `var(--bubble-enter-duration)`; easing: `ease-out`; fill-mode: `both`.
+- `.message` rule: `animation: bubble-enter var(--bubble-enter-duration) ease-out both;`
+- `.typing-indicator` rule: `display: flex; gap: 4px; padding: 8px 12px;`
+- `.typing-indicator .dot` rule: `width: 8px; height: 8px; border-radius: 50%; background: currentColor; opacity: 0.2; animation: typing-dot var(--typing-duration) infinite;`
+- `@media (prefers-reduced-motion: reduce)` block:
+  - `*, *::before, *::after { animation: none !important; transition: none !important; }`
 
-**Task 5 — Rewrite streaming.ts (F6 markdown + citation-badge pipeline):**
-- Add `stripMarkdown(text)` pure function: remove `**`/`*` bold/italic markers, backtick sequences, `# ` header prefixes, `> ` blockquote prefixes, `- `/`* `/`N. ` list item prefixes.
-- Rewrite `renderInto` pipeline: hold any tail matching `/\[(?:c(?:v)?)?$/` as `pending` until next chunk; on complete `[cv]`, create `span.citation-badge` with `textContent='cv'`; for all other text, use `createTextNode` (no innerHTML on model output). HTML-escape is implicit via textContent assignment.
-- Adversarial guard: streaming.ts must set `span.className = 'citation-badge'` (not 'citation-chip') in the DOM construction code, not only in CSS.
+**File:** `src/views/client/streaming.ts`
 
-**Task 6 — Animations, auto-scroll, keyboard UX, send-disabled (streaming.ts):**
-- Typing indicator: append `.typing-indicator` with 3 `.dot` children on `send()` start; remove on first text delta.
-- visualViewport listener: `if (window.visualViewport) { window.visualViewport.addEventListener('resize', function() { document.documentElement.style.setProperty('--visual-vh', window.visualViewport.height + 'px'); }); }`.
-- Auto-scroll (F8): track `userScrolledUp` via debounced scroll listener (`true` when `window.scrollY < document.body.scrollHeight - window.innerHeight - 100`); call `window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'})` in pump loop only when `!userScrolledUp`; reset `userScrolledUp = false` on new message submit.
-- Keyboard UX: `textarea.addEventListener('keydown', function(e) { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); if (textarea.value.trim()) submitForm(); } else if (e.key==='Escape') { textarea.value=''; textarea.blur(); } })`.
-- Send disabled: `btn.disabled = true` on mount when textarea empty; `textarea.addEventListener('input', function() { btn.disabled = !textarea.value.trim(); })`; `btn.disabled = true` on submit; restore in `.finally()`.
+Typing indicator lifecycle:
+- Before `fetch('/chat')` resolves: append a `<div class="typing-indicator">` with three `<span class="dot">` children to `.message-list`.
+- On first streamed delta: remove the typing indicator element.
+- On stream error: remove the typing indicator element.
 
-**Task 7 — Credit error detection in chat.ts and UI (F11):**
-- In `src/routes/chat.ts` after `!upstream.ok` check: `const errBody = await upstream.clone().json().catch(() => null); if (errBody?.error?.message && String(errBody.error.message).toLowerCase().includes('credit')) { return new Response(JSON.stringify({ error: 'upstream_unavailable', reason: 'credits' }), { status: 502, headers: JSON_HEADERS }); }`.
-- Shape matches `references/anthropic-messages-error.json`: `{type:'error', error:{type:'invalid_request_error', message:'...credit...'}}`. The word 'credit' appears in detection logic.
-- In streaming.ts error handler: if `json && json.reason === 'credits'`, show 'Service temporarily unavailable: API credit limit reached.'; else show generic error.
+### F8 — Auto-Scroll
 
-**Task 8 — LICENSE Section 7(b):**
-- Append before final newline: 'Additional Terms under GNU AGPL-3.0 Section 7(b):\n\nAny version of this Program made available over a computer network must display, in its user interface, a prominent link to the canonical source repository:\n  https://github.com/m-naw/theclientzero-askmycv\nThis attribution notice may not be removed or obscured by any downstream distributor or fork.'.
+**File:** `src/views/client/streaming.ts`
 
-**Task 9 — Tests and regression verification:**
-- Add credit-error test in `src/test/chat-abuse.test.ts` or new file: mock Anthropic returning HTTP 400 with credit message, assert worker HTTP 502 with `reason:'credits'`.
-- Run `pnpm test`, `pnpm build`, `pnpm typecheck`, `pnpm lint`.
+Auto-scroll behavior:
+- After every `renderInto()` call: if `(document.documentElement.scrollHeight - window.scrollY - window.innerHeight) < 100` then call `window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })`.
+- This 100px threshold prevents jumping when the user has scrolled up to read earlier messages.
 
-## Implementation Notes
+### F9 — Mobile-Responsive Layout
 
-**Token-discipline compatibility:** `@keyframes` percentage/opacity/transform values are not hex/px/rem literals. Timing values (`1.4s`, `400ms`) go into `toCssVars()` as CSS vars (`--typing-duration`, `--bubble-enter-duration`) which is the declared safe zone.
+**File:** `src/views/design-tokens.ts`
 
-**citation-badge vs citation-chip:** Keep `.citation-chip` CSS for backward compat (existing tests reference it via template tag). Add `.citation-badge` CSS alongside it. Update streaming.ts DOM construction to use `citation-badge` class on new spans.
+Add to `baseStyles()` CSS:
+- `body, .page { min-height: 100dvh; }` with fallback `min-height: 100vh;` for browsers without `dvh` support.
+- `.composer-form { position: sticky; bottom: 0; background: var(--color-surface); padding: 8px; }`
+- `.btn, .composer .textarea { min-height: 44px; }` — ensures 44px touch targets.
+- `@media (max-width: 540px)` breakpoint:
+  - `.page { padding: 8px; }`
+  - `.composer-form { padding: 4px; }`
+- `.page-footer { text-align: center; padding: 16px 0; font-size: 0.75rem; opacity: 0.6; }`
 
-**Hard constraint checklist:** No new unauthenticated routes. GET/ and POST/chat remain unauthenticated. Anthropic API key not in response bodies (credit detection reads upstream response body only). No wrangler.toml [vars] additions. Admin auth untouched.
+**File:** `src/views/client/streaming.ts`
 
-**role="log" already met:** `src/views/chat-page.ts:46` already emits `role="log" aria-live="polite"`. Verify this line survives sprint 1 edits.
+Visual viewport (iOS Safari keyboard survival):
+- Listen to `window.visualViewport?.addEventListener('resize', handler)` if `visualViewport` is available.
+- Handler: set `document.body.style.height = window.visualViewport.height + 'px'` to contract the body when the soft keyboard pushes the viewport up.
 
-## Verification Criteria
+### F10 — Keyboard UX
 
-All done_when criteria map to deterministic structural checks.
+**File:** `src/views/client/streaming.ts`
+
+- Attach `keydown` listener to the textarea:
+  - `Enter` (without `shiftKey`): `e.preventDefault(); form.requestSubmit();`
+  - `Shift+Enter`: allow default (inserts newline).
+  - `Escape`: `input.blur();`
+- Send-button disabled state:
+  - Before `fetch('/chat')` call: `btn.disabled = true; btn.textContent = 'Sending…';`
+  - After stream completes (done or error): `btn.disabled = false; btn.textContent = 'Send';`
+  - Locate button via `form.querySelector('button[type="submit"]')`.
+
+### F11 — Credit-Distinct Error Handling
+
+**File:** `src/routes/chat.ts`
+
+In the handler that proxies the Anthropic upstream response:
+- When upstream returns a non-OK status: read the response body as JSON.
+- If `body?.error?.message?.toLowerCase().includes('credit')` is true: return HTTP 502 with `{ error: 'upstream_unavailable', reason: 'credits' }`.
+- Otherwise: return HTTP 502 with `{ error: 'upstream_unavailable' }` (existing behavior).
+- Reference shape: `references/anthropic-messages-error.json`.
+
+**File:** `src/views/client/streaming.ts`
+
+Client-side credit error display:
+- After `fetch('/chat')` resolves: check `res.status === 502` and parse body JSON.
+- If `data?.reason === 'credits'`: set `bubble.textContent = 'Chat is temporarily unavailable — credit limit reached.'`
+- Else for other non-OK status: set `bubble.textContent = 'Something went wrong. Please try again.'`
+
+### F14 — Footer Attribution
+
+**File:** `src/views/chat-page.ts`
+
+At module scope (not inside the render function), declare:
+```typescript
+const MAINTAINER_GH_USERNAME = 'm-naw';
+const MAINTAINER_REPO_NAME = 'theclientzero-askmycv';
+const MAINTAINER_X_HANDLE = 'TheClientZero';
+```
+
+Append to the page body a `<footer class="page-footer">` element containing:
+- A canonical repo link: `<a href="https://github.com/${MAINTAINER_GH_USERNAME}/${MAINTAINER_REPO_NAME}">Source on GitHub</a>`
+- Attribution text referencing the maintainer
+- An X.com link: `<a href="https://x.com/${MAINTAINER_X_HANDLE}">@${MAINTAINER_X_HANDLE}</a>`
+- AGPL-3.0 notice text
+
+**File:** `LICENSE`
+
+Append an AGPL-3.0 Section 7(b) additional terms clause:
+```
+Additional Terms (Section 7(b) of AGPL-3.0)
+
+As an additional requirement under Section 7(b) of the GNU Affero General
+Public License v3.0, you must preserve the attribution notice and canonical
+repository link appearing in the footer of all user-facing HTML pages served
+by this software. The canonical repository URL is:
+  https://github.com/m-naw/theclientzero-askmycv
+This notice must remain visible and unmodified in all modified versions.
+```
+
+---
+
+## Security Invariants (must be preserved)
+
+- Anthropic API key never appears in any HTML response or worker console output.
+- Admin plaintext password is never persisted in any KV value; only bcrypt/argon2id hash is stored.
+- Daily Anthropic spend cap and per-IP chat rate limit are enforced on every chat request; no bypass path.
+- GET / and POST /chat remain unauthenticated; admin login is never required to view public chat.
+- Cloudflare Access JWT verification is auto-detected and optional; never hardcoded as mandatory.
+- No production-visible variable used for test mocking is introduced into wrangler.toml [vars].
+
+---
+
+## Token Discipline
+
+- `design-tokens.ts` is the ONLY file allowed to contain raw hex/px/rem/timing literals.
+- Animation durations 1.4s and 400ms must be CSS vars (`--typing-duration`, `--bubble-enter-duration`).
+- All other files reference these via `var(--typing-duration)` etc.
