@@ -321,3 +321,26 @@ entries:
       - src/routes/chat.ts
       - LICENSE
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G6
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-18T18:47:03.997Z
+    summary: "Goal G6: Inline recovery pages with verified Cloudflare dashboard
+      navigation completed."
+    findings:
+      - category: observation
+        text: "All 11 criteria are MET. All structural checks pass: error-pages.ts
+          contains dash.cloudflare.com, setup_window_start, and STATE; src/views
+          contains admin_password_hash (login.ts) and a &lt;details&gt;
+          expandable; error-pages.ts has no docs/ anchor hrefs; setup.ts has
+          recovery_summary and no recovery_url. Functional: pnpm test passes
+          272/272 tests (the previously failing /Cloudflare dashboard/i test was
+          fixed by the follow-up sprint updating anchor link text from
+          'dash.cloudflare.com' to 'Cloudflare dashboard'); pnpm build exits 0.
+          Verdict: pass."
+    affected_files:
+      - src/views/error-pages.ts
+      - src/views/setup-instructions.ts
+      - src/routes/setup.ts
+      - src/routes/admin.ts
+      - src/__tests__/setup/setup-acceptance.test.ts
+    baseline_after_goal: goal-completion gate passed (build + tests green)
