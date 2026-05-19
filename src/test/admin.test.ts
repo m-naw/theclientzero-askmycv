@@ -158,8 +158,8 @@ describe("GET /admin — session-primary auth model", () => {
     expect(html).not.toContain("sk-ant");
   });
 
-  // S6: no session cookie → 401 (session is the primary auth layer)
-  it("missing session cookie returns 401 regardless of JWT", async () => {
+  // S6: no session cookie → 303 redirect to /admin/login (session is the primary auth layer)
+  it("missing session cookie returns 303 redirect to /admin/login regardless of JWT", async () => {
     const kp = await createJwtHarness();
     await getEnv().STATE.put(TEST_JWKS_KV_KEY, JSON.stringify(kp.jwksDocument));
     const cfg = baseConfig();
@@ -172,10 +172,11 @@ describe("GET /admin — session-primary auth model", () => {
       email: cfg.access_email!,
     });
 
-    // No session cookie, JWT present — should still get 401
+    // No session cookie, JWT present — should redirect to login (changed in fix-admin-no-session-303-redirect)
     const res = await runFetch(adminGetRequest({ jwt }));
-    expect(res.status).toBe(401);
-    // API key must not appear even in denial response
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toContain("/admin/login");
+    // API key must not appear even in redirect response
     const body = await res.text();
     expect(body).not.toContain("sk-ant-admin-test-secret-key");
   });

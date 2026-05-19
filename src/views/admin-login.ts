@@ -11,6 +11,7 @@
 import { renderLayout } from "./layout";
 import { input, button } from "./primitives/index";
 import { escapeHtml } from "./escape";
+import { TOKENS } from "./design-tokens";
 
 export interface AdminLoginFormProps {
   /** Optional error message to display above the form. */
@@ -31,7 +32,7 @@ export interface AdminLoginFormProps {
  */
 export function renderAdminLoginForm(opts: AdminLoginFormProps = {}): string {
   const errorHtml = opts.error
-    ? `<div class="error-banner" role="alert">${escapeHtml(opts.error)}</div>`
+    ? `<div class="error-banner" role="alert" style="color:${TOKENS.color.error}">${escapeHtml(opts.error)}</div>`
     : "";
 
   const nextHtml = opts.next
