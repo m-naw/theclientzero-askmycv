@@ -115,10 +115,17 @@ export async function requireAdminAuth(
   const session = await verifySessionCookie(request, env.STATE);
   if (session === null) {
     const url = new URL(request.url);
+    // Avoid redirect loops: if already on /login, don't append next.
+    if (url.pathname === "/login") {
+      return new Response(null, {
+        status: 303,
+        headers: { Location: "/login" },
+      });
+    }
     const next = encodeURIComponent(url.pathname + url.search);
     return new Response(null, {
       status: 303,
-      headers: { Location: `/admin/login?next=${next}` },
+      headers: { Location: `/login?next=${next}` },
     });
   }
 

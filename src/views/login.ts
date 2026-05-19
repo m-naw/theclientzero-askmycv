@@ -17,6 +17,12 @@ export interface LoginFormProps {
   error?: string;
   /** Optional accent color. */
   accentColor?: string;
+  /**
+   * Optional safe relative path to redirect to after successful login.
+   * Must already be sanitized by sanitizeNext — rendered as a hidden input.
+   * When omitted or equals "/", the hidden input is not rendered.
+   */
+  next?: string;
 }
 
 /**
@@ -31,6 +37,13 @@ export function renderLoginForm(opts: LoginFormProps = {}): string {
     ? `<div class="error-banner" role="alert">${escapeHtml(opts.error)}</div>`
     : "";
 
+  // Render hidden next input only when a non-root next path is present.
+  // HTML-escape the value as defence-in-depth (sanitizeNext already validated).
+  const nextInput =
+    opts.next && opts.next !== "/"
+      ? `<input type="hidden" name="next" value="${escapeHtml(opts.next)}">`
+      : "";
+
   const body = `
 <!-- Citation: F19 — admin login forgot-password expandable (renderLoginForm) -->
 <!-- Source: https://developers.cloudflare.com/kv/ verified 2026-05-18 -->
@@ -38,6 +51,7 @@ export function renderLoginForm(opts: LoginFormProps = {}): string {
   <h1 class="form-title">Admin Login</h1>
   ${errorHtml}
   <form method="POST" action="/login" class="form-card">
+    ${nextInput}
     ${input({
       name: "admin_password",
       label: "Admin password",
