@@ -22,6 +22,7 @@ import worker from "../../worker";
 import type { StoredConfig } from "../../types/config";
 
 const ANTHROPIC_HOST = "https://anthropic-mock-kv.test";
+const ANTHROPIC_HOST_SPEND = "https://anthropic-mock-kv-spend.test";
 
 interface TestEnv {
   STATE: KVNamespace;
@@ -41,6 +42,7 @@ async function clearKv(): Promise<void> {
     "setup_window_start",
     `spend:${today}`,
     `ratelimit:10.50.0.1:${today}-${hour}`,
+    `ratelimit:10.51.0.1:${today}-${hour}`,
   ]) {
     await kv.delete(key);
   }
@@ -89,6 +91,19 @@ function chatRequest(): Request {
       "user-agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       "cf-connecting-ip": "10.50.0.1",
+    },
+    body: JSON.stringify({ messages: [{ role: "user", content: "Hello" }] }),
+  });
+}
+
+function chatRequestSpend(): Request {
+  return new Request("https://example.test/chat", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "user-agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "cf-connecting-ip": "10.51.0.1",
     },
     body: JSON.stringify({ messages: [{ role: "user", content: "Hello" }] }),
   });
@@ -168,6 +183,88 @@ describe("Acceptance — KV put() failure is handled gracefully (spec §12)", ()
     expect(typeof res!.status).toBe("number");
     // The status should either be a successful stream (200) or a graceful
     // error (5xx/4xx). What matters: the worker did not crash.
+    expect(res!.status).toBeGreaterThanOrEqual(200);
+    expect(res!.status).toBeLessThan(600);
+  });
+
+  it("POST /chat with KV put() rejecting (covers spend-tracking path) returns well-formed response without crashing", async () => {
+    (env as Record<string, string>).ANTHROPIC_BASE_URL = ANTHROPIC_HOST_SPEND;
+
+    // Mock Anthropic upstream to return a valid SSE stream
+    const pool = fetchMock.get(ANTHROPIC_HOST_SPEND);
+    pool
+      .intercept({ path: /\/v1\/messages.*/, method: "POST" })
+      .reply(200, fakeAnthropicSse(), {
+        headers: { "content-type": "text/event-stream" },
+      });
+
+    // Monkey-patch env.STATE.put to reject — this forces both rate-limit
+    // bookkeeping writes and spend-tracking writes to throw.
+    const kv = getEnv().STATE;
+    const originalPut = kv.put.bind(kv);
+    kv.put = ((..._args: unknown[]) => {
+      return Promise.reject(new Error("KV put failed (simulated outage — covers spend-tracking)"));
+    }) as typeof kv.put;
+
+    let res: Response | null = null;
+    let threw: unknown = null;
+    try {
+      res = await runFetch(chatRequestSpend());
+      // Drain the stream so deferred spend-tracking KV writes (in flush) execute.
+      if (res.body) {
+        await drainStream(res);
+      }
+    } catch (err) {
+      threw = err;
+    } finally {
+      kv.put = originalPut;
+    }
+
+    // No unhandled exception must bubble out of the worker
+    expect(threw).toBeNull();
+    expect(res).not.toBeNull();
+    // Worker returned a valid HTTP status code
+    expect(typeof res!.status).toBe("number");
+    expect(res!.status).toBeGreaterThanOrEqual(200);
+    expect(res!.status).toBeLessThan(600);
+  });
+
+  it("POST /chat with KV.put rejecting on spend-key write returns well-formed response (spend-tracking fail-open)", async () => {
+    (env as Record<string, string>).ANTHROPIC_BASE_URL = ANTHROPIC_HOST_SPEND;
+
+    // Mock Anthropic upstream — second intercept for this test
+    const pool2 = fetchMock.get(ANTHROPIC_HOST_SPEND);
+    pool2
+      .intercept({ path: /\/v1\/messages.*/, method: "POST" })
+      .reply(200, fakeAnthropicSse(), {
+        headers: { "content-type": "text/event-stream" },
+      });
+
+    // Patch only put() — spend tracking calls put() after the stream completes.
+    // The worker must swallow the error and not crash (fail-open behaviour).
+    const kv = getEnv().STATE;
+    const originalPut = kv.put.bind(kv);
+    kv.put = ((..._args: unknown[]) => {
+      return Promise.reject(new Error("KV put failed (spend-tracking outage)"));
+    }) as typeof kv.put;
+
+    let res: Response | null = null;
+    let threw: unknown = null;
+    try {
+      res = await runFetch(chatRequestSpend());
+      if (res.body) {
+        await drainStream(res);
+      }
+    } catch (err) {
+      threw = err;
+    } finally {
+      kv.put = originalPut;
+    }
+
+    // Spend-tracking KV failure must not bubble as an unhandled exception
+    expect(threw).toBeNull();
+    expect(res).not.toBeNull();
+    expect(typeof res!.status).toBe("number");
     expect(res!.status).toBeGreaterThanOrEqual(200);
     expect(res!.status).toBeLessThan(600);
   });
