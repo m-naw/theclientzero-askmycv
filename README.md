@@ -12,6 +12,8 @@ Three accounts are required before deploying:
 - **Cloudflare** — to deploy the Worker and create KV namespaces: https://dash.cloudflare.com/sign-up
 - **Anthropic** — to obtain the API key for Claude: https://console.anthropic.com
 
+You are bringing your own Anthropic key, so you carry the bill — but a runaway charge is effectively impossible if you follow a few habits and leave the built-in limits in place. Skim [Cost & safety](#cost--safety--what-protects-your-wallet) before you top up.
+
 See [`docs/PREFLIGHT.md`](./docs/PREFLIGHT.md) for the full pre-deployment checklist including CLI setup and billing verification.
 
 ## Deploy to Cloudflare
@@ -22,9 +24,10 @@ One-click self-host on your own Cloudflare account — no signup, no shared serv
 
 After the one-click deploy:
 
-1. Open the Worker URL printed by Cloudflare — you have 10 minutes to complete setup. A $5 top-up at platform.claude.com is sufficient for approximately 5,000 conversations.
+1. Open the Worker URL printed by Cloudflare — you have 10 minutes to complete setup.
 2. Visit `/setup`, fill in your admin password (12–128 chars), Anthropic API key, and CV markdown, then submit. You are redirected to `/admin` and logged in via session cookie.
 3. Share the public URL — visitors can ask questions about your CV without any login.
+4. **Use your own domain (optional).** The Worker is served on `*.workers.dev` by default. To put it on `chat.yourname.com` or similar, register or transfer a domain through Cloudflare Registrar (no markup over wholesale) and attach a custom domain to this Worker from the dashboard — Cloudflare provisions DNS + TLS automatically. See [Cloudflare Registrar](https://www.cloudflare.com/products/registrar/) and [Workers custom domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
 
 See [`cv.example.md`](./cv.example.md) for the expected CV markdown shape.
 
@@ -36,6 +39,37 @@ Cloudflare Access is a **progressive enhancement**, not a requirement. Without i
 2. When you next visit `/setup`, the CF Access JWT is detected and its identity claims are stored alongside your config — subsequent admin requests are verified against both the session cookie and the Access JWT.
 
 There is no feature flag to flip; the worker auto-detects the JWT header. Deployments that skip this step operate in password-only mode permanently with no loss of functionality.
+
+## Cost & safety — what protects your wallet
+
+You are bringing your own Anthropic key, so you carry the bill. The Worker is designed to make a runaway bill effectively impossible if you follow the simple practices below and keep the built-in limits intact.
+
+**Practices you control (recommended):**
+
+- **No auto top-up.** Leave Anthropic's auto-recharge **off**. The worst case then becomes "the chat stops answering until you top up again" — not an unbounded charge.
+- **Top up in small increments.** A $5 top-up at platform.claude.com is enough for roughly 5,000 conversations with Haiku. Refill in $5–$10 steps rather than $100+ at once.
+- **Pick the cheaper model first.** The setup form defaults to Claude Haiku 4.5 — roughly 3× cheaper than Sonnet. Switch to Sonnet only if you actually need higher-quality answers.
+- **Set a daily budget you'd be comfortable losing in a worst-case day.** The setup form asks for `daily_budget_usd` (minimum 1 USD). Once the day's spend reaches this number the Worker refuses new Anthropic calls — no matter how much credit the key has left.
+
+**Limits the Worker enforces automatically:**
+
+| Limit | Default | Where |
+|---|---|---|
+| Hard daily Anthropic spend cap (per UTC day) | configured at setup | `daily_budget_usd` |
+| Per-visitor chat rate limit (per IP per hour) | 30 messages | `max_msgs_per_hour` |
+| Login attempts (per IP per hour) | 10 | `LOGIN_RATE_LIMIT_MAX` |
+| `/setup` attempts (per IP per 10 min) | 10 | `SETUP_RATE_LIMIT_MAX` |
+| One-time setup window after first visit | 10 minutes | `SETUP_WINDOW_MS` |
+| Bot/scripted-UA rejection (`curl`, `wget`, `python-requests`, empty UA, …) | always on | `src/abuse/ua.ts` |
+| Request body size cap | 100 KiB | setup + admin |
+| Admin password length | 12–128 chars, bcrypt-hashed | `/setup`, `/admin` |
+| Session cookie | HttpOnly · Secure · SameSite=Lax · HMAC-signed | `src/auth/session.ts` |
+| Security response headers (CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy) | always on | `src/lib/response.ts` |
+| URL inputs (LinkedIn / GitHub / PDF CV) | http(s) only — `javascript:`, `data:`, protocol-relative, whitespace-bypass all rejected | `src/lib/url.ts` |
+| Anthropic API key storage | KV only — never echoed to HTML, logs, or env vars | `src/types/config.ts` |
+| Optional Cloudflare Access SSO for `/admin` | progressive enhancement | see the Cloudflare Access section above |
+
+If you want a hard ceiling that doesn't depend on this Worker at all, set a usage budget directly in the Anthropic console — that's the belt to the Worker's suspenders.
 
 ## Local development
 
