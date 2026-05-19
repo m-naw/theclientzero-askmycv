@@ -494,6 +494,18 @@ pre { padding: var(--space-3) var(--space-4); overflow-x: auto; }
   .message-user, .message-assistant { max-width: 92%; }
 }
 
+.back-link { color: var(--color-text-muted); font-size: var(--font-sm); text-decoration: none; }
+.back-link:hover { color: var(--color-accent); text-decoration: underline; text-underline-offset: 3px; }
+
+.field-hint-list { margin: var(--space-xs) 0 0; padding-left: var(--space-lg); font-size: var(--font-sm); color: var(--color-text-muted); }
+.field-hint-list li { margin-bottom: var(--space-xs); }
+.field-hint-list a { color: var(--color-accent); }
+
+.field-error { color: var(--color-error); font-size: var(--font-sm); margin-top: var(--space-xs); display: block; }
+.input-invalid { border-color: var(--color-error); }
+
+.footer-timestamp { margin-top: var(--space-lg); text-align: center; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;

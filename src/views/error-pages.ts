@@ -90,7 +90,7 @@ ${errorBanner("The 10-minute first-time setup window has expired.")}
     <li>Open <a href="https://dash.cloudflare.com" rel="noopener noreferrer">Cloudflare dashboard</a> and sign in to your Cloudflare account.</li>
     <li>In the left sidebar, navigate to <strong>Workers &amp; Pages → KV</strong>.</li>
     <li>Locate the <strong>STATE</strong> KV namespace that is bound to this Worker.</li>
-    <li>Inside the STATE namespace, find and delete all of the following keys if they exist: <code>setup_window_start</code>, <code>admin_password_hash</code>.</li>
+    <li>Inside the STATE namespace, find and delete the following key if it exists: <code>setup_window_start</code>.</li>
     <li>Select each entry and click <strong>Delete</strong> to remove it.</li>
     <li>Return to this Worker's URL. The next request will record a fresh <code>setup_window_start</code> and open a new 10-minute window.</li>
     <li>Complete the setup form within that new 10-minute window.</li>

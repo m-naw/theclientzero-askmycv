@@ -137,16 +137,39 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
     return errorResponse(400, "invalid form body");
   }
 
+  // Collect all user-typed values upfront so we can prefill on inline errors
+  const prefillFromForm = {
+    display_name: readField(form, "display_name") || undefined,
+    headline: readField(form, "headline") || undefined,
+    cv_markdown: readField(form, "cv_markdown") || undefined,
+    location: readField(form, "location") || undefined,
+    linkedin_url: readField(form, "linkedin_url") || undefined,
+    github_url: readField(form, "github_url") || undefined,
+    pdf_cv_url: readField(form, "pdf_cv_url") || undefined,
+    accent_color: readField(form, "accent_color") || undefined,
+    model: readField(form, "model") || undefined,
+    daily_budget_usd: readField(form, "daily_budget_usd") || undefined,
+    max_msgs_per_hour: readField(form, "max_msgs_per_hour") || undefined,
+    theme: (readField(form, "theme") === "dark" ? "dark" : "light") as "light" | "dark",
+  };
+
+  function inlineError(field: string, message: string): Response {
+    return new Response(
+      renderSetupForm({ prefill: prefillFromForm, fieldError: { field, message } }),
+      { status: 400, headers: HTML_HEADERS },
+    );
+  }
+
   const parsed: Partial<ParsedFormBody> = {};
   for (const field of REQUIRED_SETUP_FIELDS) {
     const value = readField(form, field);
     if (value === "") {
-      return errorResponse(400, `missing required field: ${field}`, field);
+      return inlineError(field, `missing required field: ${field}`);
     }
     if (field === "daily_budget_usd") {
       const num = Number(value);
       if (!Number.isFinite(num) || num <= 0) {
-        return errorResponse(400, "daily_budget_usd must be a positive number", "daily_budget_usd");
+        return inlineError("daily_budget_usd", "daily_budget_usd must be a positive number");
       }
       parsed.daily_budget_usd = num;
     } else {
@@ -156,20 +179,18 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
 
   const cv = parsed.cv_markdown ?? "";
   if (cv.length < CV_MIN_LENGTH || cv.length > CV_MAX_LENGTH) {
-    return errorResponse(
-      400,
-      `cv_markdown must be between ${CV_MIN_LENGTH} and ${CV_MAX_LENGTH} characters`,
+    return inlineError(
       "cv_markdown",
+      `cv_markdown must be between ${CV_MIN_LENGTH} and ${CV_MAX_LENGTH} characters`,
     );
   }
 
   // ----- 4. admin_password validation ----------------------------------
   const adminPassword = readField(form, "admin_password");
   if (adminPassword.length < ADMIN_PASSWORD_MIN || adminPassword.length > ADMIN_PASSWORD_MAX) {
-    return errorResponse(
-      400,
-      `admin_password must be between ${ADMIN_PASSWORD_MIN} and ${ADMIN_PASSWORD_MAX} characters`,
+    return inlineError(
       "admin_password",
+      `admin_password must be between ${ADMIN_PASSWORD_MIN} and ${ADMIN_PASSWORD_MAX} characters`,
     );
   }
 

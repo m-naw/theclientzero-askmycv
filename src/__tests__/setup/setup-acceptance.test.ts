@@ -186,8 +186,9 @@ describe("Setup acceptance tests (spec §12)", () => {
 
     const postRes = await runFetch(setupRequest(null, bodyWithoutPassword));
     expect(postRes.status).toBe(400);
-    const json = await postRes.json() as { field?: string };
-    expect(json.field).toBe("admin_password");
+    const html = await postRes.text();
+    expect(postRes.headers.get("content-type")).toContain("text/html");
+    expect(html).toContain("admin_password");
 
     // config still absent
     expect(await getEnv().STATE.get("config")).toBeNull();
@@ -460,8 +461,9 @@ describe("POST /setup field validation", () => {
       body.set("daily_budget_usd", badValue);
       const res = await runFetch(setupRequest(null, body));
       expect(res.status).toBe(400);
-      const json = await res.json() as { field?: string };
-      expect(json.field).toBe("daily_budget_usd");
+      const html = await res.text();
+      expect(res.headers.get("content-type")).toContain("text/html");
+      expect(html).toContain("daily_budget_usd");
       expect(await getEnv().STATE.get("config")).toBeNull();
     }
   });
@@ -473,8 +475,9 @@ describe("POST /setup field validation", () => {
       body.delete(field);
       const res = await runFetch(setupRequest(null, body));
       expect(res.status).toBe(400);
-      const json = await res.json() as { field?: string };
-      expect(json.field).toBe(field);
+      const html = await res.text();
+      expect(res.headers.get("content-type")).toContain("text/html");
+      expect(html).toContain(field);
       expect(await getEnv().STATE.get("config")).toBeNull();
     }
   });
@@ -485,8 +488,9 @@ describe("POST /setup field validation", () => {
     body.set("admin_password", "short");
     const res = await runFetch(setupRequest(null, body));
     expect(res.status).toBe(400);
-    const json = await res.json() as { field?: string };
-    expect(json.field).toBe("admin_password");
+    const html = await res.text();
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(html).toContain("admin_password");
     expect(await getEnv().STATE.get("config")).toBeNull();
   });
 
@@ -496,8 +500,9 @@ describe("POST /setup field validation", () => {
     body.set("admin_password", "a".repeat(129));
     const res = await runFetch(setupRequest(null, body));
     expect(res.status).toBe(400);
-    const json = await res.json() as { field?: string };
-    expect(json.field).toBe("admin_password");
+    const html = await res.text();
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(html).toContain("admin_password");
     expect(await getEnv().STATE.get("config")).toBeNull();
   });
 });

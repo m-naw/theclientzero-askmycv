@@ -144,27 +144,54 @@ export async function handleAdminSave(
     return errorJson(400, "invalid form body");
   }
 
+  // Collect all user-typed values upfront so we can prefill on inline errors
+  function buildAdminPrefill(f: FormData) {
+    return {
+      display_name: readField(f, "display_name") || undefined,
+      headline: readField(f, "headline") || undefined,
+      cv_markdown: readField(f, "cv_markdown") || undefined,
+      location: readField(f, "location") || undefined,
+      linkedin_url: readField(f, "linkedin_url") || undefined,
+      github_url: readField(f, "github_url") || undefined,
+      pdf_cv_url: readField(f, "pdf_cv_url") || undefined,
+      accent_color: readField(f, "accent_color") || undefined,
+      model: readField(f, "model") || undefined,
+      daily_budget_usd: readField(f, "daily_budget_usd") || undefined,
+      max_msgs_per_hour: readField(f, "max_msgs_per_hour") || undefined,
+      theme: (readField(f, "theme") === "dark" ? "dark" : "light") as "light" | "dark",
+    };
+  }
+
+  function adminInlineError(f: FormData, field: string, message: string): Response {
+    const html = renderAdminForm({
+      email: config.access_email,
+      prefill: buildAdminPrefill(f),
+      fieldError: { field, message },
+    });
+    return new Response(html, { status: 400, headers: HTML_HEADERS });
+  }
+
   const display_name = readField(form, "display_name");
-  if (!display_name) return errorJson(400, "missing required field: display_name", "display_name");
+  if (!display_name) return adminInlineError(form, "display_name", "missing required field: display_name");
 
   const headline = readField(form, "headline");
-  if (!headline) return errorJson(400, "missing required field: headline", "headline");
+  if (!headline) return adminInlineError(form, "headline", "missing required field: headline");
 
   const cv_markdown = readField(form, "cv_markdown");
-  if (!cv_markdown) return errorJson(400, "missing required field: cv_markdown", "cv_markdown");
+  if (!cv_markdown) return adminInlineError(form, "cv_markdown", "missing required field: cv_markdown");
   if (cv_markdown.length < CV_MIN_LENGTH || cv_markdown.length > CV_MAX_LENGTH) {
-    return errorJson(
-      400,
-      `cv_markdown must be between ${CV_MIN_LENGTH} and ${CV_MAX_LENGTH} characters`,
+    return adminInlineError(
+      form,
       "cv_markdown",
+      `cv_markdown must be between ${CV_MIN_LENGTH} and ${CV_MAX_LENGTH} characters`,
     );
   }
 
   const daily_budget_raw = readField(form, "daily_budget_usd");
-  if (!daily_budget_raw) return errorJson(400, "missing required field: daily_budget_usd", "daily_budget_usd");
+  if (!daily_budget_raw) return adminInlineError(form, "daily_budget_usd", "missing required field: daily_budget_usd");
   const daily_budget_usd = Number(daily_budget_raw);
   if (!Number.isFinite(daily_budget_usd) || daily_budget_usd <= 0) {
-    return errorJson(400, "daily_budget_usd must be a positive number", "daily_budget_usd");
+    return adminInlineError(form, "daily_budget_usd", "daily_budget_usd must be a positive number");
   }
 
   // Optional fields

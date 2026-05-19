@@ -20,7 +20,7 @@ One-click self-host on your own Cloudflare account — no signup, no shared serv
 
 After the one-click deploy:
 
-1. Open the Worker URL printed by Cloudflare — you have 10 minutes to complete setup.
+1. Open the Worker URL printed by Cloudflare — you have 10 minutes to complete setup. A $5 top-up at platform.claude.com is sufficient for approximately 5,000 conversations.
 2. Visit `/setup`, fill in your admin password (12–128 chars), Anthropic API key, and CV markdown, then submit. You are redirected to `/admin` and logged in via session cookie.
 3. Share the public URL — visitors can ask questions about your CV without any login.
 

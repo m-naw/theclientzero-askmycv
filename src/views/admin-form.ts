@@ -10,6 +10,7 @@ export interface AdminFormProps {
   email?: string;
   successMessage?: string;
   resetError?: string;
+  fieldError?: { field: string; message: string };
 }
 
 export function renderAdminForm(props: AdminFormProps): string {
@@ -34,13 +35,14 @@ export function renderAdminForm(props: AdminFormProps): string {
     apiKeyRequired: false,
     apiKeyHint: "Leave blank to keep the existing key. Provide a new value only when rotating.",
     successBanner: successHtml,
+    fieldError: props.fieldError,
   });
 
   // The renderConfigForm wraps in a full page layout; we need to inject the
   // Danger Zone section before the closing </main> tag so it sits inside the
   // .page max-width container.
   const dangerZone = `
-<section class="card" style="border-color: var(--color-error);">
+<section class="card" style="border-color: var(--color-error); margin-top: var(--space-xl);">
   <h2 style="color: var(--color-error);">Danger zone</h2>
   <p class="muted">Permanently deletes all configuration, API key, password, and session secrets from KV. This cannot be undone.</p>
   ${resetErrorHtml}

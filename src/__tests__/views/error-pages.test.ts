@@ -75,9 +75,10 @@ describe("renderExpiredSetup (SC1)", () => {
     expect(html).not.toMatch(/docs\/[a-z]/);
   });
 
-  it("contains admin_password_hash KV key in recovery steps", () => {
+  it("does NOT contain admin_password_hash KV key in recovery steps (key does not exist at setup expiry)", () => {
     const html = renderExpiredSetup({});
-    expect(html).toContain("admin_password_hash");
+    expect(html).not.toContain("admin_password_hash");
+    expect(html).toContain("setup_window_start");
   });
 });
 
