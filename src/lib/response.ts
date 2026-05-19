@@ -64,6 +64,18 @@ const SECURITY_HEADERS: Readonly<Record<string, string>> = {
  * init.headers. Caller-supplied headers win, so a caller can still emit
  * Set-Cookie, Location, Retry-After, or override Content-Type for special
  * cases (e.g. SSE).
+ *
+ * Set-Cookie multiplicity:
+ *   The Fetch spec collapses repeated header names when constructing
+ *   `new Headers(record)` from a plain object, which would silently drop
+ *   additional Set-Cookie values in multi-cookie flows (logout + re-login).
+ *   To emit multiple Set-Cookie values, callers MUST pass init.headers as
+ *   an Array of tuples:
+ *
+ *     init: { headers: [['Set-Cookie', 'a=1'], ['Set-Cookie', 'b=2']] }
+ *
+ *   A `Headers` instance is also supported via `getSetCookie()`. Passing a
+ *   `Record<string,string>` only supports a single Set-Cookie value.
  */
 function mergeHeaders(contentType: string, init?: ResponseInit): Headers {
   const headers = new Headers();
@@ -72,17 +84,39 @@ function mergeHeaders(contentType: string, init?: ResponseInit): Headers {
   }
   headers.set("Content-Type", contentType);
 
-  if (init?.headers) {
-    // Headers can be Headers, Record<string,string>, or [string,string][].
-    const supplied = new Headers(init.headers);
-    supplied.forEach((value, key) => {
-      // Set-Cookie can repeat — use append to preserve multiple cookie headers.
-      if (key.toLowerCase() === "set-cookie") {
+  const supplied = init?.headers;
+  if (!supplied) return headers;
+
+  const isSetCookie = (k: string) => k.toLowerCase() === "set-cookie";
+
+  if (Array.isArray(supplied)) {
+    // Canonical multi-Set-Cookie form: Array<[name, value]>.
+    for (const [key, value] of supplied) {
+      if (isSetCookie(key)) {
         headers.append("Set-Cookie", value);
       } else {
         headers.set(key, value);
       }
+    }
+  } else if (supplied instanceof Headers) {
+    // Headers preserves Set-Cookie multiplicity via getSetCookie().
+    const cookies =
+      typeof supplied.getSetCookie === "function"
+        ? supplied.getSetCookie()
+        : [];
+    for (const c of cookies) headers.append("Set-Cookie", c);
+    supplied.forEach((value, key) => {
+      if (!isSetCookie(key)) headers.set(key, value);
     });
+  } else {
+    // Record<string,string> — Set-Cookie can only carry a single value here.
+    for (const [key, value] of Object.entries(supplied)) {
+      if (isSetCookie(key)) {
+        headers.append("Set-Cookie", value);
+      } else {
+        headers.set(key, value);
+      }
+    }
   }
 
   return headers;

@@ -158,7 +158,10 @@ describe("SDD-5: security-header baseline on all responses", () => {
     expect(res.status).toBe(303);
     expectBaselineHeaders(res);
     expect(res.headers.get("Location")).toBe("/login?logged_out=1");
-    expect(res.headers.get("Set-Cookie")).toMatch(/session=/);
+    const setCookie = res.headers.get("Set-Cookie") ?? "";
+    expect(setCookie).toMatch(/session=/);
+    // Must actually clear the cookie, not just touch it.
+    expect(setCookie).toMatch(/(Max-Age=0|Expires=Thu, 01 Jan 1970)/);
   });
 
   it("POST /chat success: SSE response keeps text/event-stream + baseline headers", async () => {
@@ -209,5 +212,25 @@ describe("SDD-5: security-header baseline on all responses", () => {
     expect(res.status).toBe(503);
     expectBaselineHeaders(res);
     expect(res.headers.get("Content-Type")).toContain("application/json");
+  });
+});
+
+describe("SDD-5: response builder preserves multiple Set-Cookie values", () => {
+  it("Array<[name,value]> init.headers form yields multiple Set-Cookie headers", async () => {
+    const { jsonResponse } = await import("../../lib/response");
+    const res = jsonResponse(
+      { ok: true },
+      {
+        headers: [
+          ["Set-Cookie", "a=1; Path=/"],
+          ["Set-Cookie", "b=2; Path=/"],
+        ],
+      },
+    );
+    // Headers.getSetCookie() is the spec-compliant way to read multiplicity.
+    const cookies = res.headers.getSetCookie();
+    expect(cookies).toContain("a=1; Path=/");
+    expect(cookies).toContain("b=2; Path=/");
+    expect(cookies).toHaveLength(2);
   });
 });
