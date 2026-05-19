@@ -20,12 +20,12 @@ export interface StoredConfig {
   anthropic_api_key: string;
   /** Hard daily Anthropic spend cap, in USD. Required. */
   daily_budget_usd: number;
-  /** Owner's email captured from the Access JWT during setup. Required. */
-  access_email: string;
-  /** Access application audience captured at setup. Required. */
-  access_aud: string;
-  /** Cloudflare team domain (host portion of iss) captured at setup. Required. */
-  access_team_domain: string;
+  /** Owner's email captured from the Access JWT during setup. Optional (CF Access is optional). */
+  access_email?: string;
+  /** Access application audience captured at setup. Optional (CF Access is optional). */
+  access_aud?: string;
+  /** Cloudflare team domain (host portion of iss) captured at setup. Optional (CF Access is optional). */
+  access_team_domain?: string;
   /** ms-since-epoch timestamp at which setup completed. Required. */
   setup_timestamp: number;
 
@@ -47,6 +47,12 @@ export interface StoredConfig {
   model?: string;
   /** Page accent color (CSS color literal — hex, named, or otherwise). Optional. */
   accent_color?: string;
+  /** UI color scheme. Optional; defaults to 'light'. */
+  theme?: 'light' | 'dark';
+  /** Bcrypt/argon2id hash of the admin password. KV-only; never echoed. */
+  admin_password_hash?: string;
+  /** HMAC-SHA256 cookie signing secret. KV-only; never echoed. */
+  cookie_signing_secret?: string;
 }
 
 /** Models the setup/admin forms expose. Other values are rejected at save. */
@@ -89,18 +95,21 @@ export function parseStoredConfig(
     return { ok: false, error: "config must be an object" };
   }
   const r = raw as Record<string, unknown>;
-  const stringFields = [
+  const requiredStringFields = [
     "display_name",
     "headline",
     "cv_markdown",
     "anthropic_api_key",
-    "access_email",
-    "access_aud",
-    "access_team_domain",
   ] as const;
-  for (const f of stringFields) {
+  for (const f of requiredStringFields) {
     if (typeof r[f] !== "string" || (r[f] as string).length === 0) {
       return { ok: false, error: `field ${f} missing or not a non-empty string` };
+    }
+  }
+  // access_email, access_aud, access_team_domain are optional (CF Access is optional)
+  for (const f of ["access_email", "access_aud", "access_team_domain"] as const) {
+    if (r[f] !== undefined && (typeof r[f] !== "string" || (r[f] as string).length === 0)) {
+      return { ok: false, error: `field ${f} must be a non-empty string when present` };
     }
   }
   if (typeof r.daily_budget_usd !== "number" || Number.isNaN(r.daily_budget_usd)) {

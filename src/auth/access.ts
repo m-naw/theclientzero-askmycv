@@ -18,6 +18,10 @@ import {
   type JwksDocument,
   type VerifiedPayload,
 } from "./jwt";
+import { verifySessionCookie } from "./session";
+import { resolveJwksSource } from "../routes/jwks-source";
+import type { StoredConfig } from "../types/config";
+import type { Env } from "../env";
 
 export interface VerifiedAccessIdentity {
   email: string;
@@ -90,3 +94,66 @@ export async function verifyAccessJwt(
 }
 
 export { InvalidTokenError, ExpiredTokenError };
+
+// ---------------------------------------------------------------------------
+// Dual-layer admin auth helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Verify the admin session cookie, and optionally also verify a CF Access JWT
+ * when config.access_email is set.
+ *
+ * Returns null when the request is authorized.
+ * Returns a Response (401 or 403) when authorization fails.
+ */
+export async function requireAdminAuth(
+  request: Request,
+  env: Env,
+  config: StoredConfig | null,
+): Promise<Response | null> {
+  // Layer 1: session cookie
+  const session = await verifySessionCookie(request, env.STATE);
+  if (session === null) {
+    const url = new URL(request.url);
+    // Avoid redirect loops: if already on /login, don't append next.
+    if (url.pathname === "/login") {
+      return new Response(null, {
+        status: 303,
+        headers: { Location: "/login" },
+      });
+    }
+    const next = encodeURIComponent(url.pathname + url.search);
+    return new Response(null, {
+      status: 303,
+      headers: { Location: `/login?next=${next}` },
+    });
+  }
+
+  // Layer 2: optional CF Access JWT when access_email is configured
+  if (config?.access_email && config.access_email.length > 0) {
+    const jwt = request.headers.get("cf-access-jwt-assertion") ?? "";
+    if (jwt.length === 0) {
+      return new Response("Access JWT invalid: missing token", { status: 403 });
+    }
+    try {
+      const jwksSource = await resolveJwksSource(env);
+      const identity = await verifyAccessJwt(jwt, {
+        ...jwksSource,
+        audience: config.access_aud,
+      });
+      // Verify team domain matches config
+      if (
+        config.access_team_domain &&
+        config.access_team_domain.length > 0 &&
+        identity.team_domain !== config.access_team_domain
+      ) {
+        return new Response("Access JWT invalid: team_domain_mismatch", { status: 403 });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "unknown error";
+      return new Response(`Access JWT invalid: ${msg}`, { status: 403 });
+    }
+  }
+
+  return null;
+}

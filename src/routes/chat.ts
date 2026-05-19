@@ -36,10 +36,20 @@ import { isGarbageInput } from "../abuse/input-guard";
 import { checkAndIncrement } from "../abuse/rate-limit";
 import { utcDateKey, readSpend, addSpend } from "../budget/spend";
 import { computeCostUsd } from "../pricing/index";
+// F11: consume the captured Anthropic credit-error realShape fixture from G1.
+// The fixture is the authoritative body shape for credit-exhaustion responses;
+// matching the canonical message exactly (plus loose substring) keeps detection
+// resilient to upstream wording drift.
+import creditErrorShape from "../../references/anthropic-messages-error.json";
+import { jsonResponse, sseResponse } from "../lib/response";
 
-const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" } as const;
-const SSE_HEADERS = {
-  "content-type": "text/event-stream; charset=utf-8",
+const CREDIT_ERROR_MESSAGE: string = creditErrorShape.error.message;
+/**
+ * SSE-specific headers that must accompany the streaming response.
+ * sseResponse() sets Content-Type=text/event-stream and the security baseline;
+ * we add cache + buffering hints here.
+ */
+const SSE_EXTRA_HEADERS = {
   "cache-control": "no-cache, no-transform",
   "x-accel-buffering": "no",
 } as const;
@@ -55,10 +65,7 @@ interface IncomingMessage {
 }
 
 function errorJson(status: number, error: string, extraHeaders?: Record<string, string>): Response {
-  return new Response(JSON.stringify({ error }), {
-    status,
-    headers: { ...JSON_HEADERS, ...extraHeaders },
-  });
+  return jsonResponse({ error }, { status, headers: extraHeaders });
 }
 
 async function readConfig(env: Env): Promise<StoredConfig | null> {
@@ -128,8 +135,21 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
   // ----- 4. Per-IP rate limit (spec §9 F7) --------------------------
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   const limit = cfg.max_msgs_per_hour ?? DEFAULT_MAX_MSGS_PER_HOUR;
-  const { allowed } = await checkAndIncrement(env.STATE, ip, limit, new Date());
-  if (!allowed) {
+  // KV outage hardening: fail-closed. If rate-limit bookkeeping is
+  // unavailable we cannot enforce the per-IP cap, and an attacker who can
+  // induce KV errors could otherwise drain the daily Anthropic budget by
+  // flooding /chat. Return 503 instead, and log the outage so the operator
+  // can react.
+  let rateLimitAllowed = false;
+  try {
+    const { allowed } = await checkAndIncrement(env.STATE, ip, limit, new Date());
+    rateLimitAllowed = allowed;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("chat rate-limit KV error — failing closed", err);
+    return errorJson(503, "rate limit unavailable");
+  }
+  if (!rateLimitAllowed) {
     return errorJson(429, "rate limit exceeded", {
       "retry-after": String(secondsUntilMidnight()),
     });
@@ -191,19 +211,37 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
   } catch {
     clearTimeout(timeoutId);
     // AbortError means the timeout fired; any other error is also upstream unavailable.
-    return new Response(JSON.stringify({ error: "upstream_unavailable" }), {
-      status: 502,
-      headers: JSON_HEADERS,
-    });
+    return jsonResponse({ error: "upstream_unavailable" }, { status: 502 });
   }
 
   clearTimeout(timeoutId);
 
   if (!upstream.ok || upstream.body === null) {
-    return new Response(JSON.stringify({ error: "upstream_unavailable" }), {
-      status: 502,
-      headers: JSON_HEADERS,
-    });
+    // F11: distinguish Anthropic insufficient-credit response from generic
+    // upstream failures so the chat UI can surface a credit-specific notice.
+    // Captured shape: references/anthropic-messages-error.json (HTTP 400,
+    // invalid_request_error, message contains "credit").
+    let reason: string | undefined;
+    try {
+      const text = await upstream.text();
+      if (text.length > 0) {
+        const parsed: unknown = JSON.parse(text);
+        const msg =
+          (parsed as { error?: { message?: unknown } } | null)?.error?.message;
+        if (
+          typeof msg === "string" &&
+          (msg === CREDIT_ERROR_MESSAGE || msg.toLowerCase().includes("credit"))
+        ) {
+          reason = "credits";
+        }
+      }
+    } catch {
+      /* unparseable upstream body — fall through to generic */
+    }
+    const body = reason
+      ? { error: "upstream_unavailable", reason }
+      : { error: "upstream_unavailable" };
+    return jsonResponse(body, { status: 502 });
   }
 
   // ----- 9/10. bridge SSE + track usage (spec §9 F6) ----------------
@@ -264,5 +302,5 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
   });
 
   const stream = upstream.body.pipeThrough(transform);
-  return new Response(stream, { status: 200, headers: SSE_HEADERS });
+  return sseResponse(stream, { status: 200, headers: SSE_EXTRA_HEADERS });
 }

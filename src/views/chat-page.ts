@@ -6,15 +6,46 @@ import { CHAT_STREAMING_SCRIPT } from "./client/streaming";
 
 void TOKENS;
 
+// Canonical maintainer attribution. Required by AGPL-3.0 Section 7(b)
+// additional terms — these constants and the footer they produce must
+// remain in every deployed instance of this software.
+export const MAINTAINER_GH_USERNAME = "m-naw";
+export const MAINTAINER_REPO_NAME = "theclientzero-askmycv";
+export const MAINTAINER_X_HANDLE = "TheClientZero";
+const CANONICAL_REPO_URL = `https://github.com/${MAINTAINER_GH_USERNAME}/${MAINTAINER_REPO_NAME}`;
+const CANONICAL_X_URL = `https://x.com/${MAINTAINER_X_HANDLE}`;
+
 export interface ChatPageProps {
   display_name: string;
   headline: string;
   location?: string;
   linkedin_url?: string;
   github_url?: string;
+  x_url?: string;
   pdf_cv_url?: string;
   suggested_questions: string[];
   accent_color?: string;
+  theme: 'light' | 'dark';
+}
+
+function renderFooter(props: ChatPageProps): string {
+  const repoLink = `<a href="${CANONICAL_REPO_URL}" rel="noopener noreferrer">${escapeHtml(MAINTAINER_REPO_NAME)}</a>`;
+  const xLink = `<a href="${CANONICAL_X_URL}" rel="noopener noreferrer">@${escapeHtml(MAINTAINER_X_HANDLE)}</a>`;
+
+  let deployedBy = "";
+  const deployedHref = props.linkedin_url || props.github_url || props.x_url;
+  if (deployedHref) {
+    deployedBy = `<span class="sep">·</span><a href="${escapeHtml(deployedHref)}" rel="noopener noreferrer">Deployed by ${escapeHtml(props.display_name)}</a>`;
+  }
+
+  return `<footer class="page-footer" role="contentinfo">
+  <span>Source: ${repoLink}</span>
+  <span class="sep">·</span>
+  <span>${xLink}</span>
+  ${deployedBy}
+  <span class="sep">·</span>
+  <span>AGPL-3.0 — preserve this attribution.</span>
+</footer>`;
 }
 
 export function renderChatPage(props: ChatPageProps): string {
@@ -43,7 +74,7 @@ export function renderChatPage(props: ChatPageProps): string {
   ${suggestions}
 </section>
 
-<section class="message-list" aria-live="polite" aria-label="Conversation"></section>
+<section class="message-list" role="log" aria-live="polite" aria-label="Conversation"></section>
 
 <form class="composer-form" autocomplete="off">
   <div class="composer">
@@ -53,9 +84,11 @@ export function renderChatPage(props: ChatPageProps): string {
 </form>
 
 <template id="citation-template">${citationChip()}</template>
+
+${renderFooter(props)}
 `;
 
-  return renderLayout({
+  return renderLayout({ theme: props.theme,
     title: `${props.display_name} — Ask my CV`,
     accentColor: props.accent_color,
     body,

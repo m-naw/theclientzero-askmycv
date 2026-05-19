@@ -13,8 +13,8 @@
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Setup window duration: 30 minutes in milliseconds. */
-export const SETUP_WINDOW_MS = 30 * 60 * 1_000;
+/** Setup window duration: 10 minutes in milliseconds. */
+export const SETUP_WINDOW_MS = 600_000;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -66,11 +66,14 @@ export interface StateResult {
  * Minimal shape stored in KV under the "config" key.
  * Only the identity fields are needed by the state machine; the full type
  * lives in src/types/config.ts.
+ * CF Access fields are optional — when absent, the worker operates in
+ * password-only mode and does not require a JWT for /setup or /admin.
  */
 interface StoredConfigIdentity {
-  access_email: string;
-  access_aud: string;
-  access_team_domain: string;
+  access_email?: string;
+  access_aud?: string;
+  access_team_domain?: string;
+  admin_password_hash?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,11 +110,6 @@ export async function detectState(ctx: StateContext): Promise<StateResult> {
   const configRaw = await ctx.kv.get("config");
 
   if (configRaw !== null) {
-    // Config exists — only a JWT with exactly matching claims grants access.
-    if (!ctx.jwtValid || !ctx.jwtEmail || !ctx.jwtAud || !ctx.jwtTeamDomain) {
-      return { state: State.C_CONFIGURED, reason: "access_denied" };
-    }
-
     let storedConfig: StoredConfigIdentity;
     try {
       storedConfig = JSON.parse(configRaw) as StoredConfigIdentity;
@@ -120,13 +118,23 @@ export async function detectState(ctx: StateContext): Promise<StateResult> {
       return { state: State.C_CONFIGURED, reason: "access_denied" };
     }
 
-    if (
-      ctx.jwtEmail !== storedConfig.access_email ||
-      ctx.jwtAud !== storedConfig.access_aud ||
-      ctx.jwtTeamDomain !== storedConfig.access_team_domain
-    ) {
-      return { state: State.C_CONFIGURED, reason: "access_denied" };
+    // When access_email is set in config, CF Access JWT is required and must match.
+    if (storedConfig.access_email && storedConfig.access_email.length > 0) {
+      if (!ctx.jwtValid || !ctx.jwtEmail || !ctx.jwtAud || !ctx.jwtTeamDomain) {
+        return { state: State.C_CONFIGURED, reason: "access_denied" };
+      }
+
+      if (
+        ctx.jwtEmail !== storedConfig.access_email ||
+        ctx.jwtAud !== storedConfig.access_aud ||
+        ctx.jwtTeamDomain !== storedConfig.access_team_domain
+      ) {
+        return { state: State.C_CONFIGURED, reason: "access_denied" };
+      }
     }
+    // When access_email is absent, the worker runs in password-only mode.
+    // The state machine does not gate on JWT — admin auth is handled by
+    // the session cookie mechanism in the route handlers.
 
     return { state: State.C_CONFIGURED };
   }

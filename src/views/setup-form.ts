@@ -15,6 +15,8 @@ export interface SetupFormFields {
   pdf_cv_url?: string;
   accent_color?: string;
   model?: string;
+  admin_password?: string;
+  theme?: 'light' | 'dark';
   daily_budget_usd?: number | string;
   max_msgs_per_hour?: number | string;
 }
@@ -27,12 +29,16 @@ export interface FormVariantOptions {
   prefill?: SetupFormFields;
   apiKeyRequired: boolean;
   apiKeyHint?: string;
+  successBanner?: string;
+  fieldError?: { field: string; message: string };
+  footerTimestamp?: string;
 }
 
 export function renderConfigForm(opts: FormVariantOptions): string {
   const p = opts.prefill ?? {};
   const asString = (v: unknown): string | undefined =>
     v === undefined || v === null ? undefined : String(v);
+  const fe = opts.fieldError;
 
   const requiredFields = [
     input({
@@ -41,23 +47,45 @@ export function renderConfigForm(opts: FormVariantOptions): string {
       required: true,
       value: p.display_name,
       placeholder: "Jane Doe",
-    }),
+      invalid: fe?.field === "display_name",
+    }) + (fe?.field === "display_name" ? `\n<span class="field-error" role="alert">${fe.message}</span>` : ""),
     input({
       name: "headline",
       label: "Headline",
       required: true,
       value: p.headline,
       placeholder: "Senior backend engineer · Berlin",
-    }),
+      invalid: fe?.field === "headline",
+    }) + (fe?.field === "headline" ? `\n<span class="field-error" role="alert">${fe.message}</span>` : ""),
     input({
       name: "anthropic_api_key",
       label: "Anthropic API key",
       type: "password",
       required: opts.apiKeyRequired,
       placeholder: opts.apiKeyRequired ? "sk-ant-…" : "leave blank to keep existing",
-      hint: opts.apiKeyHint,
+      hintHtml: opts.apiKeyHint,
       autocomplete: "off",
-    }),
+      invalid: fe?.field === "anthropic_api_key",
+    }) + (fe?.field === "anthropic_api_key" ? `\n<span class="field-error" role="alert">${fe.message}</span>` : ""),
+    `<label class="field">
+  <span class="field-label">Theme</span>
+  <select class="input" name="theme" required>
+    <option value="light"${(p.theme ?? 'light') === 'light' ? ' selected' : ''}>Light</option>
+    <option value="dark"${p.theme === 'dark' ? ' selected' : ''}>Dark</option>
+  </select>
+</label>`,
+    opts.mode === "setup"
+      ? `<label class="field">
+  <span class="field-label">Admin password</span>
+  <input class="${fe?.field === "admin_password" ? "input input-invalid" : "input"}" type="password" name="admin_password" required autocomplete="off" placeholder="12–128 characters"${fe?.field === "admin_password" ? ' aria-invalid="true"' : ""} />
+  <span class="field-hint">12–128 characters</span>
+  ${fe?.field === "admin_password" ? `<span class="field-error" role="alert">${fe.message}</span>` : ""}
+</label>`
+      : `<label class="field">
+  <span class="field-label">New admin password (optional — leave blank to keep current)</span>
+  <input class="input" type="password" name="new_admin_password" autocomplete="off" placeholder="12–128 characters" />
+  <span class="field-hint">12–128 characters. Leave blank to keep the existing password.</span>
+</label>`,
     textarea({
       name: "cv_markdown",
       label: "CV in markdown",
@@ -66,7 +94,8 @@ export function renderConfigForm(opts: FormVariantOptions): string {
       value: p.cv_markdown,
       placeholder: "# Jane Doe\\n\\n## Experience\\n…",
       hint: "200–50,000 characters. This is the only knowledge the assistant uses.",
-    }),
+      invalid: fe?.field === "cv_markdown",
+    }) + (fe?.field === "cv_markdown" ? `\n<span class="field-error" role="alert">${fe.message}</span>` : ""),
   ].join("\n");
 
   const optionalFields = [
@@ -125,10 +154,17 @@ ${input({
 `;
 
   const intro = opts.intro ? `<p class="muted">${opts.intro}</p>` : "";
+  const successBannerHtml = opts.successBanner ?? "";
+  const backLink = opts.mode === "admin"
+    ? '<p><a href="/" class="back-link">← Back to chat</a> · <a href="/logout" class="logout-link">Log out</a></p>'
+    : '';
+  const timestampHtml = opts.footerTimestamp ? `<p class="muted footer-timestamp">Page generated: ${opts.footerTimestamp}</p>` : '';
 
   const body = `
+${successBannerHtml}
 <header>
   <h1>${opts.mode === "setup" ? "First-time setup" : "Edit configuration"}</h1>
+  ${backLink}
   ${intro}
 </header>
 
@@ -150,11 +186,13 @@ ${input({
 
   ${button({ label: opts.mode === "setup" ? "Save and go live" : "Save changes", type: "submit", variant: "primary" })}
 </form>
+${timestampHtml}
 `;
 
   return renderLayout({
     title: opts.title,
     accentColor: p.accent_color,
+    theme: p.theme,
     body,
   });
 }
@@ -162,12 +200,19 @@ ${input({
 export interface SetupFormProps {
   prefill?: SetupFormFields;
   email?: string;
+  resetBanner?: string;
+  fieldError?: { field: string; message: string };
 }
 
 export function renderSetupForm(props: SetupFormProps = {}): string {
   const intro = props.email
     ? `Authenticated as ${props.email}. Fill in the form below to bring your CV chat online.`
     : "Fill in the form below to bring your CV chat online.";
+  const successBanner = props.resetBanner
+    ? `<div class="success-banner" role="status">${props.resetBanner}</div>`
+    : undefined;
+  const ts = new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  const apiKeyHint = '<ol class="field-hint-list"><li>Sign up at <a href="https://platform.claude.com" target="_blank" rel="noopener noreferrer">platform.claude.com</a></li><li>Top up a minimum balance of $5 (sufficient for ~5,000 conversations)</li><li>Go to <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer">platform.claude.com/settings/keys</a></li><li>Create a new key, copy it, paste above</li></ol>';
   return renderConfigForm({
     mode: "setup",
     action: "/setup",
@@ -175,5 +220,9 @@ export function renderSetupForm(props: SetupFormProps = {}): string {
     intro,
     prefill: props.prefill,
     apiKeyRequired: true,
+    apiKeyHint,
+    successBanner,
+    fieldError: props.fieldError,
+    footerTimestamp: ts,
   });
 }

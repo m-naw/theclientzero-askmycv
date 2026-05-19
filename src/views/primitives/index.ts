@@ -34,7 +34,10 @@ export interface InputProps {
   value?: string;
   placeholder?: string;
   hint?: string;
+  /** Raw HTML hint — rendered without escaping. Caller is responsible for safety. */
+  hintHtml?: string;
   autocomplete?: string;
+  invalid?: boolean;
 }
 
 export function input(props: InputProps): string {
@@ -43,10 +46,15 @@ export function input(props: InputProps): string {
   const value = props.value !== undefined ? ` value="${escapeAttr(props.value)}"` : "";
   const placeholder = props.placeholder ? ` placeholder="${escapeAttr(props.placeholder)}"` : "";
   const autocomplete = props.autocomplete ? ` autocomplete="${escapeAttr(props.autocomplete)}"` : "";
-  const hint = props.hint ? `<span class="field-hint">${escapeHtml(props.hint)}</span>` : "";
+  const invalid = props.invalid ? ' aria-invalid="true" class="input input-invalid"' : ' class="input"';
+  const hint = props.hintHtml
+    ? `<span class="field-hint">${props.hintHtml}</span>`
+    : props.hint
+    ? `<span class="field-hint">${escapeHtml(props.hint)}</span>`
+    : "";
   return `<label class="field">
   <span class="field-label">${escapeHtml(props.label)}</span>
-  <input class="input" name="${escapeAttr(props.name)}" type="${escapeAttr(type)}"${value}${placeholder}${autocomplete}${req} />
+  <input${invalid} name="${escapeAttr(props.name)}" type="${escapeAttr(type)}"${value}${placeholder}${autocomplete}${req} />
   ${hint}
 </label>`;
 }
@@ -59,6 +67,7 @@ export interface TextareaProps {
   placeholder?: string;
   hint?: string;
   rows?: number;
+  invalid?: boolean;
 }
 
 export function textarea(props: TextareaProps): string {
@@ -67,9 +76,11 @@ export function textarea(props: TextareaProps): string {
   const placeholder = props.placeholder ? ` placeholder="${escapeAttr(props.placeholder)}"` : "";
   const hint = props.hint ? `<span class="field-hint">${escapeHtml(props.hint)}</span>` : "";
   const value = props.value !== undefined ? escapeHtml(props.value) : "";
+  const invalidAttr = props.invalid ? ' aria-invalid="true"' : "";
+  const cls = props.invalid ? "textarea input-invalid" : "textarea";
   return `<label class="field">
   <span class="field-label">${escapeHtml(props.label)}</span>
-  <textarea class="textarea" name="${escapeAttr(props.name)}"${rows}${placeholder}${req}>${value}</textarea>
+  <textarea class="${cls}" name="${escapeAttr(props.name)}"${rows}${placeholder}${req}${invalidAttr}>${value}</textarea>
   ${hint}
 </label>`;
 }

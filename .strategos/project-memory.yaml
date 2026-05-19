@@ -191,3 +191,289 @@ entries:
       - src/auth/
       - src/__tests__/admin/
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G2
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-17T23:51:27.765Z
+    summary: "Goal G2: Foundation: config schema, theme system, system prompt, SEO,
+      accessibility baseline completed."
+    findings:
+      - category: observation
+        text: 'All 17 done-when criteria are MET. Structural checks confirm:
+          admin_password and theme fields in setup-form.ts; data-theme attribute
+          in layout.ts/design-tokens.ts; dark theme hex #181613 and light theme
+          #fafaf7 in design-tokens.ts; plain text/no markdown in system.ts;
+          og:title and twitter:card in layout.ts; role="log" in chat-page.ts;
+          all three fonts (Fraunces, Instrument Sans, JetBrains Mono) present in
+          views. Functional checks all pass: 214/214 tests, clean build,
+          typecheck, and lint.'
+    affected_files:
+      - src/views/setup-form.ts
+      - src/views/admin-form.ts
+      - src/views/chat-page.ts
+      - src/views/layout.ts
+      - src/views/design-tokens.ts
+      - src/prompts/system.ts
+      - src/types/config.ts
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G2
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-18T00:34:20.979Z
+    summary: "Goal G2: Foundation: config schema, theme system, system prompt, SEO,
+      accessibility baseline completed."
+    findings:
+      - category: observation
+        text: "All 17 criteria are MET. The iteration successfully implements:
+          admin_password and theme fields in setup form, dual-theme token system
+          with #181613 (dark) and #fafaf7 (light) hex values, data-theme
+          attribute on html element, plain text/no markdown system prompt
+          instruction, og:title and twitter:card SEO meta tags, role=log
+          accessibility attribute, and font preloads for Fraunces, Instrument
+          Sans, and JetBrains Mono. All 226 tests pass (up from baseline 214),
+          and build/typecheck/lint are clean."
+    affected_files:
+      - src/views/setup-form.ts
+      - src/views/admin-form.ts
+      - src/views/chat-page.ts
+      - src/views/layout.ts
+      - src/views/design-tokens.ts
+      - src/prompts/system.ts
+      - src/types/config.ts
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G3
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-18T03:15:09.421Z
+    summary: "Goal G3: Admin password authentication, admin panel additions, setup
+      window tightening completed."
+    findings:
+      - category: observation
+        text: "All 26 criteria MET. The followup-2 sprint resolved the 2 smoke test
+          failures from the previous review (the tests now correctly model
+          password-primary auth with optional CF Access JWT). Final state:
+          240/240 tests pass, build and typecheck clean, bcrypt cost 12
+          confirmed, HMAC-SHA256 session cookies implemented, 600s setup window
+          enforced, DELETE ALL CONFIG reset present, contract parity script
+          passes, all structural artifacts (auth-surface.md,
+          check-contract-parity.mjs, Danger Zone UI, session cookie attributes)
+          verified in workspace."
+    affected_files:
+      - src/auth/access.ts
+      - src/auth/access-token.ts
+      - src/auth/identity.ts
+      - src/auth/jwt.ts
+      - src/routes/setup.ts
+      - src/routes/admin.ts
+      - src/state/machine.ts
+      - src/types/config.ts
+      - src/abuse/rate-limit.ts
+      - package.json
+      - src/__tests__/admin/admin.test.ts
+      - src/__tests__/setup/setup-acceptance.test.ts
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G3
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-18T03:38:31.560Z
+    summary: "Goal G3: Admin password authentication, admin panel additions, setup
+      window tightening completed."
+    findings:
+      - category: observation
+        text: All 26 criteria are MET. The iteration delivers password-primary admin
+          authentication with bcryptjs (saltRounds=12), HMAC-SHA256 signed
+          session cookies (askmycv_admin_session, HttpOnly, SameSite=Lax), 500ms
+          anti-bruteforce delay, DELETE ALL CONFIG reset endpoint, 600-second
+          setup window, rate-limit infrastructure, danger-zone UI, and
+          docs/specs/auth-surface.md. All 240 tests pass, build and typecheck
+          complete cleanly, and the contract-parity script exits 0.
+    affected_files:
+      - src/auth/access.ts
+      - src/auth/access-token.ts
+      - src/auth/identity.ts
+      - src/auth/jwt.ts
+      - src/routes/setup.ts
+      - src/routes/admin.ts
+      - src/state/machine.ts
+      - src/types/config.ts
+      - src/abuse/rate-limit.ts
+      - package.json
+      - src/__tests__/admin/admin.test.ts
+      - src/__tests__/setup/setup-acceptance.test.ts
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G5
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-18T18:11:04.354Z
+    summary: "Goal G5: Chat user experience layer — citations, animations, scroll,
+      mobile, input, errors, footer completed (holistic)."
+    findings:
+      - category: observation
+        text: "All 16 criteria are MET. Structural checks confirm citation-badge,
+          @keyframes, 1.4s typing duration, prefers-reduced-motion,
+          sticky/dvh/visualViewport, shiftKey handling,
+          MAINTAINER_GH_USERNAME/m-naw/TheClientZero constants, LICENSE Section
+          7(b) clause, credit error distinction in chat route, aria-live, and
+          send button disabled logic are all present in the workspace.
+          Functional checks pass: 254/254 tests pass, build succeeds, typecheck
+          reports zero errors."
+    affected_files:
+      - src/views/chat-page.ts
+      - src/views/client/
+      - src/views/primitives/
+      - src/views/design-tokens.ts
+      - src/views/layout.ts
+      - src/routes/chat.ts
+      - LICENSE
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G6
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-18T18:47:03.997Z
+    summary: "Goal G6: Inline recovery pages with verified Cloudflare dashboard
+      navigation completed."
+    findings:
+      - category: observation
+        text: "All 11 criteria are MET. All structural checks pass: error-pages.ts
+          contains dash.cloudflare.com, setup_window_start, and STATE; src/views
+          contains admin_password_hash (login.ts) and a &lt;details&gt;
+          expandable; error-pages.ts has no docs/ anchor hrefs; setup.ts has
+          recovery_summary and no recovery_url. Functional: pnpm test passes
+          272/272 tests (the previously failing /Cloudflare dashboard/i test was
+          fixed by the follow-up sprint updating anchor link text from
+          'dash.cloudflare.com' to 'Cloudflare dashboard'); pnpm build exits 0.
+          Verdict: pass."
+    affected_files:
+      - src/views/error-pages.ts
+      - src/views/setup-instructions.ts
+      - src/routes/setup.ts
+      - src/routes/admin.ts
+      - src/__tests__/setup/setup-acceptance.test.ts
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G6
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-18T19:14:15.032Z
+    summary: "Goal G6: Inline recovery pages with verified Cloudflare dashboard
+      navigation completed."
+    findings:
+      - category: observation
+        text: "All 11 criteria are MET. The followup sprint resolved the 27 test
+          failures from the previous review cycle — the test suite now reports
+          272 passing tests across 35 files. All structural criteria
+          (error-pages.ts literals, src/views directory presence of
+          admin_password_hash and details elements, absence of docs/ anchors in
+          error-pages.ts, recovery_summary present and recovery_url absent in
+          setup.ts) are confirmed by direct grep evidence. pnpm build succeeds
+          cleanly. Verdict: pass."
+    affected_files:
+      - src/views/error-pages.ts
+      - src/views/setup-instructions.ts
+      - src/routes/setup.ts
+      - src/routes/admin.ts
+      - src/__tests__/setup/setup-acceptance.test.ts
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G6
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-18T19:28:09.565Z
+    summary: "Goal G6: Inline recovery pages with verified Cloudflare dashboard
+      navigation completed."
+    findings:
+      - category: observation
+        text: All 11 criteria are MET. The error-pages.ts contains all required literals
+          (dash.cloudflare.com, setup_window_start, STATE, Delete). The
+          src/views directory contains admin_password_hash (in login.ts) and a
+          details element. No docs/ anchors exist in error-pages.ts. The
+          setup.ts route includes recovery_summary and excludes recovery_url.
+          All 272 tests pass and the build succeeds cleanly.
+    affected_files:
+      - src/views/error-pages.ts
+      - src/views/setup-instructions.ts
+      - src/routes/setup.ts
+      - src/routes/admin.ts
+      - src/__tests__/setup/setup-acceptance.test.ts
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G7
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-19T10:26:25.341Z
+    summary: "Goal G7: Documentation suite and LICENSE attribution clause completed."
+    findings:
+      - category: observation
+        text: All 16 criteria are MET. The followup sprint
+          (ITR-1779184809824-followup-1) resolved the previously UNMET criterion
+          15 by adding the 4 missing URLs to docs/SOURCES.md. All required doc
+          files exist, README contains the preflight section with correct signup
+          URLs, LICENSE carries the Section 7(b) clause, all docs carry 'Last
+          verified' stamps, SOURCES.md has 15+ cited URLs, all cross-referenced
+          URLs are indexed, and no vague navigation instructions are present.
+    affected_files:
+      - docs/
+      - README.md
+      - LICENSE
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G8
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-19T11:49:28.713Z
+    summary: "Goal G8: Full v2 acceptance test suite and regression sweep completed."
+    findings:
+      - category: observation
+        text: "PASS: All 11 criteria met. pnpm test exits 0 with 292/292 passing
+          (exceeds the 234 minimum). pnpm build, typecheck, and lint all exit 0
+          with zero errors. Both required docs files exist. All four structural
+          regex criteria match files in src/__tests__. wrangler.toml contains no
+          forbidden mock env-var prefixes. The followup-2 sprint resolved the
+          previously-failing criterion 10 (admin-404-unconfigured regex
+          ordering) and the three test regressions from sprint-2."
+    affected_files:
+      - src/__tests__/
+      - docs/checkpoints/
+      - docs/SPEC_CORRECTIONS.md
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G8
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-19T12:05:33.054Z
+    summary: "Goal G8: Full v2 acceptance test suite and regression sweep completed."
+    findings:
+      - category: observation
+        text: "All 11 done-when criteria are MET. pnpm test passes with 292 tests (42
+          files), well above the 234 minimum (214 baseline + 20 acceptance
+          tests). pnpm build, typecheck, and lint all exit cleanly. Both
+          required docs files exist. All four structural regex checks against
+          src/__tests__ confirm the expected test coverage patterns (Test 20 /
+          forgot-password, chat 503 not-configured, KV/spend failure, admin 404
+          unconfigured). wrangler.toml contains no forbidden mock identifier
+          prefixes. Verdict: PASS."
+    affected_files:
+      - src/__tests__/
+      - docs/checkpoints/
+      - docs/SPEC_CORRECTIONS.md
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G8b
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-19T13:21:31.847Z
+    summary: "Goal G8b: Chat UI redesign — wire theme through render path, build
+      semantic design system, ship sexy production-grade visual completed
+      (holistic)."
+    findings:
+      - category: observation
+        text: "All 19 criteria MET. All 16 structural checks confirmed by pre-check
+          evidence. All 3 functional checks verified by running commands: pnpm
+          build passes, pnpm test passes (288 tests across 39 files), login-flow
+          integration test passes (6 tests). Iteration G8b is complete — theme
+          wiring, semantic design system, visual component treatments,
+          accessibility rules, and deploy script are all in place."
+    affected_files:
+      - src/views/design-tokens.ts
+      - src/views/chat-page.ts
+      - src/views/layout.ts
+      - src/routes/index.ts
+      - package.json
+      - .strategos/skill-load-receipt.json
+    baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G9-remediation-2
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-19T15:56:41.597Z
+    summary: "Goal G9-remediation-2: FINAL CHECKPOINT — human acceptance of v2
+      migration — remediation #2 completed."
+    findings:
+      - category: observation
+        text: All 3 stale test assertions have been updated to match the /login?next=
+          redirect contract from G4 round-3. skill-load-receipt.json is present
+          with correct iteration_id and skill list. Single commit 3d9b6ba covers
+          all changes. No view-layer regressions detected.
+    affected_files:
+      - checkpoint remediation
+    baseline_after_goal: goal-completion gate passed (build + tests green)

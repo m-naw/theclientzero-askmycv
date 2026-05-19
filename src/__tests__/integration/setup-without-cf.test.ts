@@ -1,0 +1,380 @@
+/**
+ * Integration test: setup flow without Cloudflare Access JWT.
+ *
+ * Verifies that a fresh deployment can be set up without any CF Access
+ * policy or JWT header — using only admin_password for authentication.
+ *
+ * Scenario:
+ *   1. GET /setup → 200 (setup form rendered, no JWT required)
+ *   2. POST /setup with admin_password within window → 303 + Set-Cookie
+ *   3. GET /admin with that session cookie → 200
+ */
+
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+// @ts-expect-error — provided by @cloudflare/vitest-pool-workers at runtime
+import { env, createExecutionContext, fetchMock, waitOnExecutionContext } from "cloudflare:test";
+import worker from "../../worker";
+import { TEST_JWKS_KV_KEY } from "../../routes/jwks-source";
+import { ADMIN_PASSWORD_HASH_KEY } from "../../types/auth";
+import { SESSION_COOKIE_NAME } from "../../auth/session";
+import { SETUP_RATE_LIMIT_MAX } from "../../auth/constants";
+import { SETUP_RATE_LIMIT_PREFIX } from "../../abuse/rate-limit";
+import type { StoredConfig } from "../../types/config";
+
+const ANTHROPIC_HOST = "https://anthropic-mock-nocf.test";
+
+const ADMIN_PASSWORD = "correcthorsebatterystaple";
+
+interface TestEnv {
+  STATE: KVNamespace;
+  ANTHROPIC_BASE_URL: string;
+  ACCESS_JWKS_URL_OVERRIDE: string;
+}
+
+function getEnv(): TestEnv {
+  return env as unknown as TestEnv;
+}
+
+async function clearKv(): Promise<void> {
+  const kv = getEnv().STATE;
+  for (const key of [
+    "config",
+    "setup_window_start",
+    TEST_JWKS_KV_KEY,
+    ADMIN_PASSWORD_HASH_KEY,
+    "cookie_signing_secret",
+    // SDD-2: setup rate-limit counters keyed by CF-Connecting-IP (and the
+    // "unknown" fallback used when the header is absent in tests).
+    `${SETUP_RATE_LIMIT_PREFIX}unknown`,
+    `${SETUP_RATE_LIMIT_PREFIX}10.0.0.1`,
+    `${SETUP_RATE_LIMIT_PREFIX}10.0.0.2`,
+  ]) {
+    await kv.delete(key);
+  }
+}
+
+/** Seed an active setup window so POST /setup passes the SDD-1 gate. */
+async function seedSetupWindow(): Promise<void> {
+  await getEnv().STATE.put("setup_window_start", String(Date.now()));
+}
+
+async function runFetch(request: Request): Promise<Response> {
+  const ctx = createExecutionContext();
+  const res = await worker.fetch(request, env as never, ctx);
+  await waitOnExecutionContext(ctx);
+  return res;
+}
+
+function mockAnthropicOk(): void {
+  const pool = fetchMock.get(ANTHROPIC_HOST);
+  pool
+    .intercept({ path: /\/v1\/messages.*/, method: "POST" })
+    .reply(
+      200,
+      JSON.stringify({
+        id: "msg_test",
+        type: "message",
+        role: "assistant",
+        content: [{ type: "text", text: "ok" }],
+        model: "claude-haiku-4-5-20251001",
+        stop_reason: "end_turn",
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+      { headers: { "content-type": "application/json" } },
+    )
+    .persist();
+}
+
+function makeSetupBody(): URLSearchParams {
+  const body = new URLSearchParams();
+  body.set("display_name", "Jane Doe");
+  body.set("headline", "Senior backend engineer · Berlin");
+  body.set("anthropic_api_key", "sk-ant-test-key");
+  body.set("daily_budget_usd", "5");
+  body.set(
+    "cv_markdown",
+    "# Jane Doe\n\n## Experience\n" +
+      "Lots of experience working on backend systems across multiple companies and roles. ".repeat(5),
+  );
+  body.set("admin_password", ADMIN_PASSWORD);
+  return body;
+}
+
+describe("Setup without Cloudflare Access JWT", () => {
+  beforeEach(async () => {
+    fetchMock.activate();
+    fetchMock.disableNetConnect();
+    try { fetchMock.enableNetConnect(/localhost/); } catch { /* not all versions */ }
+
+    (env as Record<string, string>).ANTHROPIC_BASE_URL = ANTHROPIC_HOST;
+    (env as Record<string, string>).ACCESS_JWKS_URL_OVERRIDE = "";
+    await clearKv();
+    await seedSetupWindow();
+  });
+
+  afterEach(async () => {
+    fetchMock.deactivate();
+    await clearKv();
+  });
+
+  it("GET /setup returns 200 (no JWT required)", async () => {
+    const res = await runFetch(
+      new Request("https://example.test/setup", { method: "GET" }),
+    );
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('name="cv_markdown"');
+    expect(html).toContain('name="admin_password"');
+  });
+
+  it("POST /setup with admin_password within window returns 303 + Set-Cookie", async () => {
+    mockAnthropicOk();
+
+    const res = await runFetch(
+      new Request("https://example.test/setup", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: makeSetupBody().toString(),
+      }),
+    );
+
+    expect(res.status).toBe(303);
+
+    // Location must point to / (root)
+    const location = res.headers.get("Location") ?? "";
+    expect(location).toMatch(/\/$/);
+    expect(location).not.toContain("/admin");
+
+    // Set-Cookie must be present with required security attributes
+    const setCookie = res.headers.get("Set-Cookie") ?? "";
+    expect(setCookie).toContain(SESSION_COOKIE_NAME);
+    expect(setCookie).toContain("HttpOnly");
+    expect(setCookie).toContain("Secure");
+    expect(setCookie).toContain("SameSite=Lax");
+
+    // Config persisted; access_email absent (no CF Access)
+    const raw = await getEnv().STATE.get("config");
+    expect(raw).not.toBeNull();
+    const cfg = JSON.parse(raw as string) as StoredConfig;
+    expect(cfg.access_email).toBeUndefined();
+    expect(cfg.display_name).toBe("Jane Doe");
+
+    // admin_password_hash stored separately — never on the config object
+    const hash = await getEnv().STATE.get(ADMIN_PASSWORD_HASH_KEY);
+    expect(hash).not.toBeNull();
+    expect(typeof hash).toBe("string");
+    // Hash must look like a bcrypt hash ($2b$ prefix)
+    expect((hash as string).startsWith("$2")).toBe(true);
+
+    // Anthropic key must never appear in the Set-Cookie header
+    expect(setCookie).not.toContain("sk-ant-test-key");
+  });
+
+  it("GET /admin with session cookie from /setup returns 200", async () => {
+    mockAnthropicOk();
+
+    // Step 1: complete setup
+    const setupRes = await runFetch(
+      new Request("https://example.test/setup", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: makeSetupBody().toString(),
+      }),
+    );
+    expect(setupRes.status).toBe(303);
+
+    // Extract session cookie value from Set-Cookie header
+    const setCookieHeader = setupRes.headers.get("Set-Cookie") ?? "";
+    const cookieMatch = setCookieHeader.match(new RegExp(`${SESSION_COOKIE_NAME}=([^;]+)`));
+    expect(cookieMatch).not.toBeNull();
+    const cookieValue = cookieMatch![1];
+    expect(cookieValue.length).toBeGreaterThan(0);
+
+    // Step 2: GET /admin with that cookie
+    const adminRes = await runFetch(
+      new Request("https://example.test/admin", {
+        method: "GET",
+        headers: {
+          cookie: `${SESSION_COOKIE_NAME}=${cookieValue}`,
+        },
+      }),
+    );
+    expect(adminRes.status).toBe(200);
+    const adminHtml = await adminRes.text();
+    // Admin page should contain config form elements
+    expect(adminHtml).toContain('name="cv_markdown"');
+  });
+
+  // ---------------------------------------------------------------------
+  // SDD-1: setup-race protection gates
+  // ---------------------------------------------------------------------
+  it("SDD-1: POST /setup with setup_window_start MISSING returns 403 and writes no config", async () => {
+    mockAnthropicOk();
+    // Remove the seeded window — simulate attacker POSTing before operator
+    // has ever visited GET /.
+    await getEnv().STATE.delete("setup_window_start");
+
+    const res = await runFetch(
+      new Request("https://example.test/setup", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: makeSetupBody().toString(),
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    // No config written.
+    expect(await getEnv().STATE.get("config")).toBeNull();
+    // No admin password hash written.
+    expect(await getEnv().STATE.get(ADMIN_PASSWORD_HASH_KEY)).toBeNull();
+  });
+
+  it("SDD-1: POST /setup with admin_password_hash already present returns 403 and does not overwrite", async () => {
+    mockAnthropicOk();
+    // Simulate a race where the legitimate operator has already sealed the
+    // admin credential, but `config` is somehow absent (or the attacker
+    // arrived between hash-write and config-write — defense in depth).
+    const sentinelHash = "$2b$10$sentinel.value.that.must.not.be.overwritten.aaaaaaaaaaaaaaaaaaaaa";
+    await getEnv().STATE.put(ADMIN_PASSWORD_HASH_KEY, sentinelHash);
+
+    const res = await runFetch(
+      new Request("https://example.test/setup", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: makeSetupBody().toString(),
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    // Sentinel hash unchanged.
+    expect(await getEnv().STATE.get(ADMIN_PASSWORD_HASH_KEY)).toBe(sentinelHash);
+    // No config written.
+    expect(await getEnv().STATE.get("config")).toBeNull();
+  });
+
+  it("SDD-1: POST /setup with valid window AND no admin_password_hash succeeds (regression guard)", async () => {
+    mockAnthropicOk();
+    // beforeEach already seeded setup_window_start; admin hash is absent.
+
+    const res = await runFetch(
+      new Request("https://example.test/setup", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: makeSetupBody().toString(),
+      }),
+    );
+
+    expect(res.status).toBe(303);
+    expect(await getEnv().STATE.get("config")).not.toBeNull();
+    expect(await getEnv().STATE.get(ADMIN_PASSWORD_HASH_KEY)).not.toBeNull();
+  });
+
+  // ---------------------------------------------------------------------
+  // SDD-2: per-IP rate limit on POST /setup
+  // ---------------------------------------------------------------------
+  it("SDD-2: N consecutive POSTs from same IP eventually trip 429 with Retry-After", async () => {
+    mockAnthropicOk();
+    const ip = "10.0.0.1";
+
+    // First SETUP_RATE_LIMIT_MAX requests are allowed by the rate limiter.
+    // They may fail downstream gates (e.g., admin_password_hash already set
+    // after the first successful POST), but the rate-limit gate itself
+    // must let them through.
+    for (let i = 0; i < SETUP_RATE_LIMIT_MAX; i++) {
+      const res = await runFetch(
+        new Request("https://example.test/setup", {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            "CF-Connecting-IP": ip,
+          },
+          body: makeSetupBody().toString(),
+        }),
+      );
+      // Must NOT be 429 — rate-limit gate has not yet tripped.
+      expect(res.status).not.toBe(429);
+    }
+
+    // The (MAX+1)th request from the same IP must trip the rate limiter.
+    const blocked = await runFetch(
+      new Request("https://example.test/setup", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          "CF-Connecting-IP": ip,
+        },
+        body: makeSetupBody().toString(),
+      }),
+    );
+    expect(blocked.status).toBe(429);
+    const retryAfter = blocked.headers.get("Retry-After");
+    expect(retryAfter).not.toBeNull();
+    expect(Number(retryAfter)).toBeGreaterThan(0);
+  });
+
+  it("SDD-2: rate limit is per-IP — a blocked IP does not affect a different IP", async () => {
+    mockAnthropicOk();
+    const ipA = "10.0.0.1";
+    const ipB = "10.0.0.2";
+
+    // Exhaust ipA's quota and confirm the next request from ipA is blocked.
+    for (let i = 0; i < SETUP_RATE_LIMIT_MAX; i++) {
+      await runFetch(
+        new Request("https://example.test/setup", {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            "CF-Connecting-IP": ipA,
+          },
+          body: makeSetupBody().toString(),
+        }),
+      );
+    }
+    const ipAblocked = await runFetch(
+      new Request("https://example.test/setup", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          "CF-Connecting-IP": ipA,
+        },
+        body: makeSetupBody().toString(),
+      }),
+    );
+    expect(ipAblocked.status).toBe(429);
+
+    // ipB has its own independent quota — its first POST must not be 429.
+    const ipBfirst = await runFetch(
+      new Request("https://example.test/setup", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          "CF-Connecting-IP": ipB,
+        },
+        body: makeSetupBody().toString(),
+      }),
+    );
+    expect(ipBfirst.status).not.toBe(429);
+  });
+
+  it("GET /admin without session cookie returns 303 redirect to /login?next=", async () => {
+    mockAnthropicOk();
+
+    // Complete setup first so config exists
+    await runFetch(
+      new Request("https://example.test/setup", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: makeSetupBody().toString(),
+      }),
+    );
+
+    // GET /admin with no cookie → 303 redirect to /login?next=%2Fadmin
+    const adminRes = await runFetch(
+      new Request("https://example.test/admin", { method: "GET" }),
+    );
+    expect(adminRes.status).toBe(303);
+    const location = adminRes.headers.get("location") ?? "";
+    expect(location).toContain("/login?next=");
+    expect(location).toContain("%2Fadmin");
+  });
+});

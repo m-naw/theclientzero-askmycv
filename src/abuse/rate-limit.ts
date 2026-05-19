@@ -5,6 +5,26 @@
  * Key expires at the next hour boundary so stale counters self-prune.
  */
 
+import {
+  LOGIN_RATE_LIMIT_MAX,
+  LOGIN_RATE_LIMIT_WINDOW_MS,
+  SETUP_RATE_LIMIT_MAX,
+  SETUP_RATE_LIMIT_WINDOW_MS,
+} from "../auth/constants";
+
+// ---------------------------------------------------------------------------
+// Login rate-limit constants
+// ---------------------------------------------------------------------------
+
+/** KV key prefix for login attempt rate limiting. Format: ratelimit:login:<ip> */
+export const LOGIN_RATE_LIMIT_PREFIX = "ratelimit:login:";
+
+// Re-export for backwards compat
+export { LOGIN_RATE_LIMIT_MAX } from "../auth/constants";
+
+/** Login rate-limit window duration in seconds (1 hour). */
+export const LOGIN_RATE_LIMIT_WINDOW_SECONDS = 3600;
+
 function hourKey(ip: string, now: Date): string {
   const date = now.toISOString().slice(0, 10); // YYYY-MM-DD
   const hour = now.getUTCHours().toString().padStart(2, "0");
@@ -39,4 +59,80 @@ export async function checkAndIncrement(
   await kv.put(key, String(count), { expirationTtl: ttlSeconds });
 
   return { allowed: count <= limit, count };
+}
+
+// ---------------------------------------------------------------------------
+// Login-specific rate limiting
+// ---------------------------------------------------------------------------
+
+/**
+ * Check and increment the login attempt counter for the given IP.
+ *
+ * Uses LOGIN_RATE_LIMIT_MAX and LOGIN_RATE_LIMIT_WINDOW_MS from auth/constants.
+ * Key format: ratelimit:login:<ip>
+ * Window: rolling LOGIN_RATE_LIMIT_WINDOW_MS milliseconds (1 hour).
+ *
+ * Returns { allowed: boolean, remaining: number }:
+ * - allowed: true if the incremented count is <= LOGIN_RATE_LIMIT_MAX
+ * - remaining: attempts remaining after this one (0 when denied)
+ */
+export async function checkLoginRateLimit(
+  kv: KVNamespace,
+  ip: string,
+): Promise<{ allowed: boolean; remaining: number }> {
+  const key = `${LOGIN_RATE_LIMIT_PREFIX}${ip}`;
+
+  const raw = await kv.get(key);
+  const prev = raw === null ? 0 : Number(raw);
+  const count = (Number.isFinite(prev) ? prev : 0) + 1;
+
+  const ttlSeconds = Math.max(1, Math.ceil(LOGIN_RATE_LIMIT_WINDOW_MS / 1000));
+  await kv.put(key, String(count), { expirationTtl: ttlSeconds });
+
+  const allowed = count <= LOGIN_RATE_LIMIT_MAX;
+  const remaining = allowed ? Math.max(0, LOGIN_RATE_LIMIT_MAX - count) : 0;
+  return { allowed, remaining };
+}
+
+// ---------------------------------------------------------------------------
+// Setup-specific rate limiting
+// ---------------------------------------------------------------------------
+
+/** KV key prefix for POST /setup attempt rate limiting. Format: setup_rate:<ip> */
+export const SETUP_RATE_LIMIT_PREFIX = "setup_rate:";
+
+/** Setup rate-limit window duration in seconds. */
+export const SETUP_RATE_LIMIT_WINDOW_SECONDS = Math.ceil(SETUP_RATE_LIMIT_WINDOW_MS / 1000);
+
+/**
+ * Check and increment the POST /setup attempt counter for the given IP.
+ *
+ * Uses SETUP_RATE_LIMIT_MAX and SETUP_RATE_LIMIT_WINDOW_MS from auth/constants.
+ * Key format: setup_rate:<ip>
+ * Window: rolling SETUP_RATE_LIMIT_WINDOW_MS milliseconds.
+ *
+ * Mirrors checkLoginRateLimit's shape so both routes share an identical
+ * KV-backed sliding-window pattern.
+ *
+ * Returns { allowed: boolean, remaining: number, retryAfterSeconds: number }:
+ * - allowed: true if the incremented count is <= SETUP_RATE_LIMIT_MAX
+ * - remaining: attempts remaining after this one (0 when denied)
+ * - retryAfterSeconds: TTL of the counter in seconds (for Retry-After header)
+ */
+export async function checkSetupRateLimit(
+  kv: KVNamespace,
+  ip: string,
+): Promise<{ allowed: boolean; remaining: number; retryAfterSeconds: number }> {
+  const key = `${SETUP_RATE_LIMIT_PREFIX}${ip}`;
+
+  const raw = await kv.get(key);
+  const prev = raw === null ? 0 : Number(raw);
+  const count = (Number.isFinite(prev) ? prev : 0) + 1;
+
+  const ttlSeconds = Math.max(1, Math.ceil(SETUP_RATE_LIMIT_WINDOW_MS / 1000));
+  await kv.put(key, String(count), { expirationTtl: ttlSeconds });
+
+  const allowed = count <= SETUP_RATE_LIMIT_MAX;
+  const remaining = allowed ? Math.max(0, SETUP_RATE_LIMIT_MAX - count) : 0;
+  return { allowed, remaining, retryAfterSeconds: ttlSeconds };
 }

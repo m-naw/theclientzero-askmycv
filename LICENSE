@@ -659,3 +659,26 @@ specific requirements.
 if any, to sign a "copyright disclaimer" for the program, if necessary.
 For more information on this, and how to apply and follow the GNU AGPL, see
 <https://www.gnu.org/licenses/>.
+
+
+-------------------------------------------------------------------------------
+
+Additional Terms (Section 7(b) of AGPL-3.0)
+
+As an additional requirement under Section 7(b) of the GNU Affero General
+Public License v3.0, you must preserve the attribution notice and canonical
+repository link appearing in the footer of all user-facing HTML pages served
+by this software. The canonical repository URL is:
+
+  https://github.com/m-naw/theclientzero-askmycv
+
+The maintainer attribution (the contents of the MAINTAINER_GH_USERNAME,
+MAINTAINER_REPO_NAME, and MAINTAINER_X_HANDLE constants in
+src/views/chat-page.ts) must remain visible and unmodified in every
+modified or redistributed version of this Program.
+
+Modified versions may add their own additional "Deployed by …" attribution
+alongside the canonical link, but must not remove the canonical link itself.
+
+If you do not wish to comply with these additional terms, you are not
+permitted to copy, modify, sublicense, or distribute this Program.

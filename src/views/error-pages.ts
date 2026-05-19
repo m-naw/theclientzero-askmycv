@@ -1,3 +1,4 @@
+import { SETUP_WINDOW_MS } from "../state/machine";
 import { TOKENS } from "./design-tokens";
 import { renderLayout } from "./layout";
 import { errorBanner } from "./primitives/index";
@@ -61,26 +62,38 @@ export interface ExpiredSetupProps {
 }
 
 export function renderExpiredSetup(props: ExpiredSetupProps = {}): string {
-  const start = props.setupWindowStart
-    ? `<p class="muted">setup_window_start was recorded at <code>${escapeHtml(props.setupWindowStart)}</code>.</p>`
-    : "";
+  // Compute expiration timestamp (start + 10 minutes) as UTC ISO8601.
+  let expiredAtHtml = "";
+  if (props.setupWindowStart) {
+    const startMs = Number(props.setupWindowStart);
+    if (Number.isFinite(startMs)) {
+      const expiredAt = new Date(startMs + SETUP_WINDOW_MS).toISOString();
+      expiredAtHtml = `<p class="muted">Window expired at: <code>${escapeHtml(expiredAt)}</code> UTC (ISO 8601).</p>`;
+    }
+  }
+
   const body = `
+<!-- Citation: F2 — expired setup window inline recovery (renderExpiredSetup) -->
+<!-- Source: https://developers.cloudflare.com/kv/ verified 2026-05-18 -->
 <header><h1>Setup window expired</h1></header>
-${errorBanner("The 30-minute first-time setup window has expired.")}
+${errorBanner("The 10-minute first-time setup window has expired.")}
 <section class="card">
   <p>
     Once a Worker starts accepting requests it records a timestamp under the KV key
-    <code>setup_window_start</code>. If configuration is not completed within 30
-    minutes of that timestamp, the Worker refuses further setup attempts so an
-    attacker cannot race the owner.
+    <code>setup_window_start</code>. If configuration is not completed within the
+    10-minute window, the Worker refuses further setup attempts so an attacker
+    cannot race the owner.
   </p>
-  ${start}
-  <h2>Recovery</h2>
+  ${expiredAtHtml}
+  <h2>Recovery steps</h2>
   <ol>
-    <li>Open the <strong>Cloudflare dashboard</strong> for your account.</li>
-    <li>Navigate to <strong>Workers &amp; Pages → KV</strong>, then open the <code>STATE</code> namespace bound to this Worker.</li>
-    <li>Delete the entry whose key is <code>setup_window_start</code>.</li>
-    <li>Reload this page. A fresh 30-minute window starts on the next request.</li>
+    <li>Open <a href="https://dash.cloudflare.com" rel="noopener noreferrer">Cloudflare dashboard</a> and sign in to your Cloudflare account.</li>
+    <li>In the left sidebar, navigate to <strong>Workers &amp; Pages → KV</strong>.</li>
+    <li>Locate the <strong>STATE</strong> KV namespace that is bound to this Worker.</li>
+    <li>Inside the STATE namespace, find and delete the following key if it exists: <code>setup_window_start</code>.</li>
+    <li>Select each entry and click <strong>Delete</strong> to remove it.</li>
+    <li>Return to this Worker's URL. The next request will record a fresh <code>setup_window_start</code> and open a new 10-minute window.</li>
+    <li>Complete the setup form within that new 10-minute window.</li>
   </ol>
 </section>
 `;
