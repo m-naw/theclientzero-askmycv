@@ -52,7 +52,7 @@ describe("Acceptance — GET /admin unconfigured returns 404 (spec §12)", () =>
     await clearKv();
   });
 
-  it("GET /admin with empty KV returns HTTP 404", async () => {
+  it("GET /admin returns 404 when unconfigured (empty KV)", async () => {
     const req = new Request("https://example.test/admin", { method: "GET" });
     const res = await runFetch(req);
     expect(res.status).toBe(404);
