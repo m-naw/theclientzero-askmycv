@@ -134,8 +134,19 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
   // ----- 4. Per-IP rate limit (spec §9 F7) --------------------------
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   const limit = cfg.max_msgs_per_hour ?? DEFAULT_MAX_MSGS_PER_HOUR;
-  const { allowed } = await checkAndIncrement(env.STATE, ip, limit, new Date());
-  if (!allowed) {
+  // KV outage hardening: if rate-limit bookkeeping (KV put) fails, fail-open
+  // by allowing the request rather than crashing the worker. This keeps the
+  // visitor-facing /chat endpoint resilient to transient KV failures.
+  let rateLimitAllowed = true;
+  try {
+    const { allowed } = await checkAndIncrement(env.STATE, ip, limit, new Date());
+    rateLimitAllowed = allowed;
+  } catch {
+    // KV write failure — fail open. The rate limit window resets at the next
+    // hour boundary regardless, so a brief loss of bookkeeping is acceptable.
+    rateLimitAllowed = true;
+  }
+  if (!rateLimitAllowed) {
     return errorJson(429, "rate limit exceeded", {
       "retry-after": String(secondsUntilMidnight()),
     });

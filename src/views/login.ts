@@ -61,6 +61,9 @@ export function renderLoginForm(opts: LoginFormProps = {}): string {
         <li>Also Delete the <code>config</code> entry from the STATE namespace to reset the Worker to setup mode.</li>
         <li>Return to the Worker root URL and complete the setup form again with a new admin password.</li>
       </ol>
+      <p>Alternatively, using the <a href="https://developers.cloudflare.com/workers/wrangler/" rel="noopener noreferrer">wrangler</a> CLI from your local checkout:</p>
+      <pre><code>wrangler kv key delete --binding=STATE admin_password_hash
+wrangler kv key delete --binding=STATE config</code></pre>
     </div>
   </details>
 </main>
