@@ -192,7 +192,7 @@ describe("Setup without Cloudflare Access JWT", () => {
     expect(adminHtml).toContain('name="cv_markdown"');
   });
 
-  it("GET /admin without session cookie returns 303 redirect to /admin/login", async () => {
+  it("GET /admin without session cookie returns 303 redirect to /login?next=", async () => {
     mockAnthropicOk();
 
     // Complete setup first so config exists
@@ -204,11 +204,13 @@ describe("Setup without Cloudflare Access JWT", () => {
       }),
     );
 
-    // GET /admin with no cookie → 303 redirect to login (changed in fix-admin-no-session-303-redirect)
+    // GET /admin with no cookie → 303 redirect to /login?next=%2Fadmin
     const adminRes = await runFetch(
       new Request("https://example.test/admin", { method: "GET" }),
     );
     expect(adminRes.status).toBe(303);
-    expect(adminRes.headers.get("location")).toContain("/admin/login");
+    const location = adminRes.headers.get("location") ?? "";
+    expect(location).toContain("/login?next=");
+    expect(location).toContain("%2Fadmin");
   });
 });

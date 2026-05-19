@@ -8,7 +8,7 @@
  *   c2) Correct password with valid next= → 303 with Location: next value
  *   c3) Correct password with invalid next= (open redirect) → 303 Location: /admin
  *   d) GET /admin with valid session + no access_email → 200
- *   e) GET /admin with no session → 303 redirect to /admin/login?next=/admin
+ *   e) GET /admin with no session → 303 redirect to /login?next=%2Fadmin
  *   e2) GET /admin with access_email set + only session cookie → 403
  *   f) POST /admin/reset with valid session + correct password + "DELETE ALL CONFIG" → KV deleted, Set-Cookie clears
  *   g) POST /admin/reset with wrong confirm → 400, KV intact
@@ -217,16 +217,15 @@ describe("admin route with no JWT — session cookie only", () => {
     expect(res.status).toBe(200);
   });
 
-  // Test (e): no session cookie → 303 redirect to /admin/login?next=/admin
-  it("(e) GET /admin with no session cookie returns 303 redirect to /admin/login?next=%2Fadmin", async () => {
+  // Test (e): no session cookie → 303 redirect to /login?next=%2Fadmin
+  it("(e) GET /admin with no session cookie returns 303 redirect to /login?next=%2Fadmin", async () => {
     await seedConfig({ owner_name: "Test" });
 
     const req = new Request("https://example.test/admin", { method: "GET" });
     const res = await runFetch(req);
     expect(res.status).toBe(303);
     const location = res.headers.get("Location") ?? "";
-    expect(location).toContain("/admin/login");
-    expect(location).toContain("next=");
+    expect(location).toContain("/login?next=");
     expect(location).toContain("%2Fadmin");
   });
 
