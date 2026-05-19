@@ -14,6 +14,7 @@ import { handlePostSetup, handleGetSetup } from "./routes/setup";
 import { handlePostChat } from "./routes/chat";
 import { handleAdminGet, handleAdminSave, handleAdminLogin, handleAdminLoginGet, handleAdminReset } from "./routes/admin";
 import { handleLoginGet, handleLoginPost } from "./routes/login";
+import { handleLogout } from "./routes/logout";
 import type { Env } from "./env";
 
 export default {
@@ -66,6 +67,10 @@ export default {
 
     if (url.pathname === "/login" && request.method === "POST") {
       return handleLoginPost(request, env, ctx);
+    }
+
+    if (url.pathname === "/logout" && (request.method === "GET" || request.method === "POST")) {
+      return handleLogout(request, env);
     }
 
     return new Response("not found", { status: 404 });

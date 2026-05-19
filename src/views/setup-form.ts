@@ -155,7 +155,9 @@ ${input({
 
   const intro = opts.intro ? `<p class="muted">${opts.intro}</p>` : "";
   const successBannerHtml = opts.successBanner ?? "";
-  const backLink = opts.mode === "admin" ? '<p><a href="/" class="back-link">← Back to chat</a></p>' : '';
+  const backLink = opts.mode === "admin"
+    ? '<p><a href="/" class="back-link">← Back to chat</a> · <a href="/logout" class="logout-link">Log out</a></p>'
+    : '';
   const timestampHtml = opts.footerTimestamp ? `<p class="muted footer-timestamp">Page generated: ${opts.footerTimestamp}</p>` : '';
 
   const body = `

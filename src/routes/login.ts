@@ -37,7 +37,17 @@ export async function handleLoginGet(
   const rawNext = url.searchParams.get("next");
   const next = rawNext !== null ? sanitizeNext(rawNext) : undefined;
 
-  return new Response(renderLoginForm({ next }), {
+  // Flash banner for post-logout / post-password-change redirects.
+  // Both states render as the existing `error` banner (a neutral notice slot)
+  // so we don't need a new view prop. Stored as an info-class string.
+  let info: string | undefined;
+  if (url.searchParams.get("logged_out") === "1") {
+    info = "Logged out. Sign in again to access the admin area.";
+  } else if (url.searchParams.get("password_changed") === "1") {
+    info = "Password changed. Please log in again with the new password.";
+  }
+
+  return new Response(renderLoginForm({ next, error: info }), {
     status: 200,
     headers: HTML_HEADERS,
   });

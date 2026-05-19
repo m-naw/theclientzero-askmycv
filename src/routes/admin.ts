@@ -273,8 +273,23 @@ export async function handleAdminSave(
   await env.STATE.put("config", JSON.stringify(updated));
 
   // If a new admin password was provided, update the hash in KV
+  // and rotate the cookie signing secret so all prior sessions become
+  // invalid. Clear the operator's current session cookie and redirect
+  // them to /login so they re-authenticate with the new password.
   if (newAdminPasswordHash !== undefined) {
     await env.STATE.put(ADMIN_PASSWORD_HASH_KEY, newAdminPasswordHash);
+    // Rotate the signing secret — next session-verify call will see no
+    // secret and reject every previously issued token. getOrCreateSigningSecret
+    // will mint a fresh secret on the next login.
+    await env.STATE.delete("cookie_signing_secret");
+    const clearCookie = clearSessionCookie();
+    return new Response(null, {
+      status: 303,
+      headers: {
+        "Set-Cookie": clearCookie,
+        Location: "/login?password_changed=1",
+      },
+    });
   }
 
   // Return success HTML — API key intentionally excluded
