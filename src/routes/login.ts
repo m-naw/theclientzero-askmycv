@@ -16,6 +16,7 @@ import { verifyPassword } from "../auth/password";
 import { createSessionCookie } from "../auth/session";
 import { ADMIN_PASSWORD_HASH_KEY } from "../types/auth";
 import { checkLoginRateLimit } from "../abuse/rate-limit";
+import { LOGIN_FAIL_DELAY_MS } from "../auth/constants";
 import { renderLoginForm } from "../views/login";
 import { sanitizeNext } from "../lib/redirect";
 import { htmlResponse, textResponse } from "../lib/response";
@@ -105,6 +106,10 @@ export async function handleLoginPost(
   // Load stored hash from KV
   const storedHash = await env.STATE.get(ADMIN_PASSWORD_HASH_KEY);
   if (storedHash === null) {
+    // Timing-safe delay — match the wrong-password branch so a remote
+    // attacker cannot distinguish "no admin configured yet" (a fresh-deploy
+    // window) from "admin configured, wrong password" via response timing.
+    await new Promise((r) => setTimeout(r, LOGIN_FAIL_DELAY_MS));
     // Emit structured auth_decision log
     // eslint-disable-next-line no-console
     console.log(JSON.stringify({ event: "auth_decision", outcome: "login_fail", reason: "no_hash_configured", ip, timestamp: new Date().toISOString() }));
@@ -116,7 +121,7 @@ export async function handleLoginPost(
 
   if (!valid) {
     // Timing-safe delay to slow brute force
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, LOGIN_FAIL_DELAY_MS));
 
     // Emit structured auth_decision log for failed login
     // eslint-disable-next-line no-console

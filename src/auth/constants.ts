@@ -16,6 +16,14 @@ export const LOGIN_RATE_LIMIT_MAX = 10;
 export const LOGIN_RATE_LIMIT_WINDOW_MS = 3_600_000;
 
 /**
+ * Wrong-password timing delay (ms) applied on every authentication failure
+ * branch — wrong password, missing hash, etc. Keeping the delay identical
+ * across branches prevents a remote attacker from distinguishing "no admin
+ * configured yet" from "admin configured, wrong password" via response timing.
+ */
+export const LOGIN_FAIL_DELAY_MS = 500;
+
+/**
  * Maximum POST /setup attempts per IP within the setup rate-limit window.
  *
  * The legitimate operator needs at most a handful of attempts within the

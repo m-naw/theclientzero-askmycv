@@ -20,6 +20,8 @@ import { verifyPassword, hashPassword } from "../auth/password";
 import { ADMIN_PASSWORD_HASH_KEY } from "../types/auth";
 import { checkLoginRateLimit } from "../abuse/rate-limit";
 import { isSafeUrl } from "../lib/url";
+import { sanitizeNext } from "../lib/redirect";
+import { LOGIN_FAIL_DELAY_MS } from "../auth/constants";
 import { htmlResponse, jsonResponse, textResponse } from "../lib/response";
 import { renderAdminForm } from "../views/admin-form";
 import { renderAdminLoginForm } from "../views/admin-login";
@@ -326,18 +328,22 @@ export async function handleAdminSave(
 // ---------------------------------------------------------------------------
 
 /**
- * Sanitize a `next` redirect target so only same-origin /admin/* paths
- * are honored. Returns the sanitized path or "/admin" as fallback.
+ * Sanitize a `next` redirect target for admin-area redirects.
+ *
+ * Delegates to the shared sanitizeNext helper (which handles URL-decode,
+ * protocol-relative, scheme-colon, and length guards) and then applies the
+ * admin-specific constraint that the result must live under /admin/* (or
+ * equal /admin exactly). Anything else returns undefined so callers fall
+ * back to the default /admin destination.
  */
 function sanitizeNextParam(raw: string | null): string | undefined {
-  if (!raw) return undefined;
-  // Must start with /admin/ or equal /admin exactly
-  if (!raw.startsWith("/admin/") && raw !== "/admin") return undefined;
-  // Reject protocol-relative and absolute URLs
-  if (raw.startsWith("//")) return undefined;
-  // Reject embedded schemes (e.g. javascript:, http:)
-  if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(raw)) return undefined;
-  return raw;
+  if (raw === null) return undefined;
+  const sanitized = sanitizeNext(raw);
+  // sanitizeNext returns "/" as its safe fallback — treat that as no-next.
+  if (sanitized === "/") return undefined;
+  // Admin-specific post-filter: only /admin/* or exactly /admin.
+  if (sanitized !== "/admin" && !sanitized.startsWith("/admin/")) return undefined;
+  return sanitized;
 }
 
 export async function handleAdminLoginGet(
@@ -406,7 +412,7 @@ export async function handleAdminLogin(
   // Verify password
   const valid = await verifyPassword(password, storedHash);
   if (!valid) {
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, LOGIN_FAIL_DELAY_MS));
     const loginHtml = renderAdminLoginForm({ error: "Invalid password", next: sanitizeNextParam(nextRaw) });
     return htmlResponse(loginHtml, { status: 401 });
   }
@@ -502,7 +508,7 @@ export async function handleAdminReset(
   // Verify current password
   const valid = await verifyPassword(current_password, storedHash);
   if (!valid) {
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, LOGIN_FAIL_DELAY_MS));
     return renderResetError("Invalid password");
   }
 
