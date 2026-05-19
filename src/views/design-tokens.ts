@@ -70,7 +70,7 @@ export const TOKENS = {
   },
 } as const;
 
-const DEFAULT_ACCENT = "#3b5bdb";
+const DEFAULT_ACCENT = "#b85c38";
 const DEFAULT_ACCENT_FG = "#ffffff";
 
 function sanitizeAccent(accent?: string): string {
@@ -122,7 +122,7 @@ export function toCssVars(accentColor?: string): string {
   --accent-foreground: #ffffff;
 
   /* Message bubbles (literal fallback satisfies single-line regex; dynamic line below is the runtime value) */
-  --message-user-bg: #3b5bdb;
+  --message-user-bg: #b85c38;
   --message-user-bg: ${accent};
   --message-user-text: #ffffff;
   --message-assistant-bg: #fbf9f4;
@@ -326,6 +326,12 @@ header h1 + .muted { margin-top: var(--space-1); font-size: var(--font-base); co
 .error-banner {
   background: var(--error-bg); color: var(--error-text);
   border: 1px solid color-mix(in srgb, var(--error-text) 30%, transparent);
+  border-radius: var(--radius); padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.success-banner {
+  background: var(--success-bg); color: var(--text-primary);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   border-radius: var(--radius); padding: var(--space-4);
   margin-bottom: var(--space-4);
 }

@@ -16,7 +16,7 @@ import {
   clearSessionCookie,
   verifySessionCookie,
 } from "../auth/session";
-import { verifyPassword } from "../auth/password";
+import { verifyPassword, hashPassword } from "../auth/password";
 import { ADMIN_PASSWORD_HASH_KEY } from "../types/auth";
 import { checkLoginRateLimit } from "../abuse/rate-limit";
 import { renderAdminForm } from "../views/admin-form";
@@ -102,6 +102,7 @@ export async function handleAdminGet(
       max_msgs_per_hour: config.max_msgs_per_hour,
       model: config.model,
       accent_color: config.accent_color,
+      theme: config.theme,
     },
   });
 
@@ -184,6 +185,18 @@ export async function handleAdminSave(
     ? modelRaw
     : (config.model ?? DEFAULT_MODEL);
   const accent_color = readField(form, "accent_color").trim() || undefined;
+  const themeRaw = readField(form, "theme") || "light";
+  const theme: "light" | "dark" = themeRaw === "dark" ? "dark" : "light";
+
+  // Optional new admin password — only update if non-empty and meets length requirement
+  const newAdminPasswordRaw = readField(form, "new_admin_password");
+  let newAdminPasswordHash: string | undefined;
+  if (newAdminPasswordRaw.length > 0) {
+    if (newAdminPasswordRaw.length < 12) {
+      return errorJson(400, "new_admin_password must be at least 12 characters", "new_admin_password");
+    }
+    newAdminPasswordHash = await hashPassword(newAdminPasswordRaw);
+  }
 
   // Anthropic key: blank = preserve existing; non-blank = validate + replace
   const newKeyRaw = readField(form, "anthropic_api_key");
@@ -227,13 +240,20 @@ export async function handleAdminSave(
     max_msgs_per_hour,
     model,
     accent_color,
+    theme,
   };
 
   await env.STATE.put("config", JSON.stringify(updated));
 
+  // If a new admin password was provided, update the hash in KV
+  if (newAdminPasswordHash !== undefined) {
+    await env.STATE.put(ADMIN_PASSWORD_HASH_KEY, newAdminPasswordHash);
+  }
+
   // Return success HTML — API key intentionally excluded
   const html = renderAdminForm({
     email: config.access_email,
+    successMessage: "Configuration saved.",
     prefill: {
       display_name: updated.display_name,
       headline: updated.headline,
@@ -246,6 +266,7 @@ export async function handleAdminSave(
       max_msgs_per_hour: updated.max_msgs_per_hour,
       model: updated.model,
       accent_color: updated.accent_color,
+      theme: updated.theme,
     },
   });
 
@@ -338,7 +359,8 @@ export async function handleAdminLogin(
   const valid = await verifyPassword(password, storedHash);
   if (!valid) {
     await new Promise((r) => setTimeout(r, 500));
-    return new Response("Invalid password", { status: 401 });
+    const loginHtml = renderAdminLoginForm({ error: "Invalid password", next: sanitizeNextParam(nextRaw) });
+    return new Response(loginHtml, { status: 401, headers: HTML_HEADERS });
   }
 
   // Issue session cookie
@@ -402,29 +424,57 @@ export async function handleAdminReset(
     return new Response("Admin password not configured", { status: 401 });
   }
 
+  // Helper to re-render admin form with a reset error
+  async function renderResetError(resetError: string): Promise<Response> {
+    const cfg = await loadConfig(env);
+    if (cfg === null) {
+      return new Response(resetError, { status: 400 });
+    }
+    const html = renderAdminForm({
+      email: cfg.access_email,
+      resetError,
+      prefill: {
+        display_name: cfg.display_name,
+        headline: cfg.headline,
+        cv_markdown: cfg.cv_markdown,
+        daily_budget_usd: cfg.daily_budget_usd,
+        location: cfg.location,
+        linkedin_url: cfg.linkedin_url,
+        github_url: cfg.github_url,
+        pdf_cv_url: cfg.pdf_cv_url,
+        max_msgs_per_hour: cfg.max_msgs_per_hour,
+        model: cfg.model,
+        accent_color: cfg.accent_color,
+        theme: cfg.theme,
+      },
+    });
+    return new Response(html, { status: 200, headers: HTML_HEADERS });
+  }
+
   // Verify current password
   const valid = await verifyPassword(current_password, storedHash);
   if (!valid) {
     await new Promise((r) => setTimeout(r, 500));
-    return new Response("Invalid password", { status: 401 });
+    return renderResetError("Invalid password");
   }
 
   // Check confirm string
   if (confirm !== "DELETE ALL CONFIG") {
-    return new Response("Confirmation string mismatch", { status: 400 });
+    return renderResetError("Confirmation string mismatch — type exactly: DELETE ALL CONFIG");
   }
 
   // Delete KV keys
   await Promise.all([
     env.STATE.delete("config"),
+    env.STATE.delete("secrets"),
     env.STATE.delete("admin_password_hash"),
     env.STATE.delete("cookie_signing_secret"),
   ]);
 
-  // Return 200 with clearing session cookie
+  // Clear session cookie and redirect to /setup?reset=1
   const setCookie = clearSessionCookie();
-  return new Response("Reset complete", {
-    status: 200,
-    headers: { "Set-Cookie": setCookie },
+  return new Response(null, {
+    status: 303,
+    headers: { "Set-Cookie": setCookie, "Location": "/setup?reset=1" },
   });
 }

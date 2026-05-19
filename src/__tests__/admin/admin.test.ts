@@ -260,12 +260,13 @@ describe("POST /admin/reset", () => {
     await clearKv();
   });
 
-  // Test (f): valid session + correct password + "DELETE ALL CONFIG" → KV deleted, session cleared
+  // Test (f): valid session + correct password + "DELETE ALL CONFIG" → KV deleted, session cleared, 303 redirect
   it("(f) correct credentials + exact confirm string deletes KV keys and clears session cookie", async () => {
     const cookieValue = await loginAndGetCookieValue();
 
     const res = await runFetch(resetRequest(cookieValue, TEST_PASSWORD, "DELETE ALL CONFIG"));
-    expect(res.status).toBe(200);
+    // Spec FIX 4B: successful reset returns 303 redirect to /setup?reset=1 with cleared session cookie
+    expect(res.status).toBe(303);
 
     const kv = getEnv().STATE;
     expect(await kv.get("config")).toBeNull();
@@ -275,14 +276,20 @@ describe("POST /admin/reset", () => {
     const setCookie = res.headers.get("Set-Cookie") ?? "";
     expect(setCookie).toContain(SESSION_COOKIE_NAME);
     expect(setCookie).toContain("Max-Age=0");
+
+    const location = res.headers.get("Location") ?? "";
+    expect(location).toContain("/setup");
   });
 
-  // Test (g): wrong confirm string → 400, KV keys intact
+  // Test (g): wrong confirm string → 200 HTML with error (admin form re-rendered), KV keys intact
   it("(g) wrong confirm string returns 400 and KV keys are not deleted", async () => {
     const cookieValue = await loginAndGetCookieValue();
 
     const res = await runFetch(resetRequest(cookieValue, TEST_PASSWORD, "wrong string"));
-    expect(res.status).toBe(400);
+    // Spec FIX 4A: on confirm mismatch, re-render admin form with error banner (200 HTML)
+    expect(res.status).toBe(200);
+    const ct = res.headers.get("content-type") ?? "";
+    expect(ct).toContain("text/html");
 
     const kv = getEnv().STATE;
     expect(await kv.get("config")).not.toBeNull();

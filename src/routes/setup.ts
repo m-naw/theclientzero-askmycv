@@ -293,7 +293,12 @@ export async function handleGetSetup(request: Request, env: Env, _ctx: Execution
     // JWT present but invalid — ignore for GET (don't block the form render)
   }
 
-  return new Response(renderSetupForm({ email }), {
+  const url = new URL(request.url);
+  const resetBanner = url.searchParams.get("reset") === "1"
+    ? "Configuration has been reset. Please set up askmycv again."
+    : undefined;
+
+  return new Response(renderSetupForm({ email, resetBanner }), {
     status: 200,
     headers: HTML_HEADERS,
   });

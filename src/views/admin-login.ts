@@ -40,22 +40,22 @@ export function renderAdminLoginForm(opts: AdminLoginFormProps = {}): string {
     : "";
 
   const body = `
-<main class="centered-form">
-  <h1 class="form-title">Admin Login</h1>
-  ${errorHtml}
-  <form method="POST" action="/admin/login" class="form-card">
-    ${nextHtml}
-    ${input({
-      name: "password",
-      label: "Admin password",
-      type: "password",
-      required: true,
-      placeholder: "Enter admin password",
-      autocomplete: "current-password",
-    })}
-    ${button({ label: "Sign in", type: "submit", variant: "primary" })}
-  </form>
-</main>
+<header>
+  <h1>Admin Login</h1>
+</header>
+${errorHtml}
+<form method="POST" action="/admin/login" autocomplete="off">
+  ${nextHtml}
+  ${input({
+    name: "password",
+    label: "Admin password",
+    type: "password",
+    required: true,
+    placeholder: "Enter admin password",
+    autocomplete: "current-password",
+  })}
+  ${button({ label: "Sign in", type: "submit", variant: "primary" })}
+</form>
 `;
 
   return renderLayout({

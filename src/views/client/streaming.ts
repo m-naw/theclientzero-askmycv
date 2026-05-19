@@ -95,7 +95,7 @@ export const CHAT_STREAMING_SCRIPT = `
       if (data && data.reason === 'credits') {
         bubble.textContent = 'Chat is temporarily unavailable — credit limit reached. Please try again later.';
       } else {
-        bubble.textContent = 'Something went wrong reaching the model. Please try again.';
+        bubble.textContent = 'Something went wrong reaching the model. Please try again later.';
       }
     }).catch(function () {
       bubble.textContent = 'Something went wrong. Please try again.';

@@ -29,6 +29,7 @@ export interface FormVariantOptions {
   prefill?: SetupFormFields;
   apiKeyRequired: boolean;
   apiKeyHint?: string;
+  successBanner?: string;
 }
 
 export function renderConfigForm(opts: FormVariantOptions): string {
@@ -59,7 +60,9 @@ export function renderConfigForm(opts: FormVariantOptions): string {
       placeholder: opts.apiKeyRequired ? "sk-ant-…" : "leave blank to keep existing",
       hint: opts.apiKeyHint,
       autocomplete: "off",
-    }),
+    }) + (opts.mode === "setup"
+      ? `\n<p class="field-hint">Get your API key at <a href="https://platform.claude.com" target="_blank" rel="noopener noreferrer">platform.claude.com</a>.</p>`
+      : ""),
     `<label class="field">
   <span class="field-label">Theme</span>
   <select class="input" name="theme" required>
@@ -67,10 +70,16 @@ export function renderConfigForm(opts: FormVariantOptions): string {
     <option value="dark"${p.theme === 'dark' ? ' selected' : ''}>Dark</option>
   </select>
 </label>`,
-    `<label class="field">
+    opts.mode === "setup"
+      ? `<label class="field">
   <span class="field-label">Admin password</span>
   <input class="input" type="password" name="admin_password" required autocomplete="off" placeholder="12–128 characters" />
   <span class="field-hint">12–128 characters</span>
+</label>`
+      : `<label class="field">
+  <span class="field-label">New admin password (optional — leave blank to keep current)</span>
+  <input class="input" type="password" name="new_admin_password" autocomplete="off" placeholder="12–128 characters" />
+  <span class="field-hint">12–128 characters. Leave blank to keep the existing password.</span>
 </label>`,
     textarea({
       name: "cv_markdown",
@@ -139,8 +148,10 @@ ${input({
 `;
 
   const intro = opts.intro ? `<p class="muted">${opts.intro}</p>` : "";
+  const successBannerHtml = opts.successBanner ?? "";
 
   const body = `
+${successBannerHtml}
 <header>
   <h1>${opts.mode === "setup" ? "First-time setup" : "Edit configuration"}</h1>
   ${intro}
@@ -169,6 +180,7 @@ ${input({
   return renderLayout({
     title: opts.title,
     accentColor: p.accent_color,
+    theme: p.theme,
     body,
   });
 }
@@ -176,12 +188,16 @@ ${input({
 export interface SetupFormProps {
   prefill?: SetupFormFields;
   email?: string;
+  resetBanner?: string;
 }
 
 export function renderSetupForm(props: SetupFormProps = {}): string {
   const intro = props.email
     ? `Authenticated as ${props.email}. Fill in the form below to bring your CV chat online.`
     : "Fill in the form below to bring your CV chat online.";
+  const successBanner = props.resetBanner
+    ? `<div class="success-banner" role="status">${props.resetBanner}</div>`
+    : undefined;
   return renderConfigForm({
     mode: "setup",
     action: "/setup",
@@ -189,5 +205,6 @@ export function renderSetupForm(props: SetupFormProps = {}): string {
     intro,
     prefill: props.prefill,
     apiKeyRequired: true,
+    successBanner,
   });
 }
