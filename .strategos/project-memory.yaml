@@ -463,3 +463,17 @@ entries:
       - package.json
       - .strategos/skill-load-receipt.json
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G9-remediation-2
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-19T15:56:41.597Z
+    summary: "Goal G9-remediation-2: FINAL CHECKPOINT — human acceptance of v2
+      migration — remediation #2 completed."
+    findings:
+      - category: observation
+        text: All 3 stale test assertions have been updated to match the /login?next=
+          redirect contract from G4 round-3. skill-load-receipt.json is present
+          with correct iteration_id and skill list. Single commit 3d9b6ba covers
+          all changes. No view-layer regressions detected.
+    affected_files:
+      - checkpoint remediation
+    baseline_after_goal: goal-completion gate passed (build + tests green)
