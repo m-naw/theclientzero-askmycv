@@ -404,3 +404,21 @@ entries:
       - README.md
       - LICENSE
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G8
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-19T11:49:28.713Z
+    summary: "Goal G8: Full v2 acceptance test suite and regression sweep completed."
+    findings:
+      - category: observation
+        text: "PASS: All 11 criteria met. pnpm test exits 0 with 292/292 passing
+          (exceeds the 234 minimum). pnpm build, typecheck, and lint all exit 0
+          with zero errors. Both required docs files exist. All four structural
+          regex criteria match files in src/__tests__. wrangler.toml contains no
+          forbidden mock env-var prefixes. The followup-2 sprint resolved the
+          previously-failing criterion 10 (admin-404-unconfigured regex
+          ordering) and the three test regressions from sprint-2."
+    affected_files:
+      - src/__tests__/
+      - docs/checkpoints/
+      - docs/SPEC_CORRECTIONS.md
+    baseline_after_goal: goal-completion gate passed (build + tests green)
