@@ -49,8 +49,8 @@ function renderFooter(props: ChatPageProps): string {
 }
 
 export function renderChatPage(props: ChatPageProps): string {
-  if (!Array.isArray(props.suggested_questions) || props.suggested_questions.length < 3) {
-    throw new Error("renderChatPage: at least 3 suggested_questions required");
+  if (!Array.isArray(props.suggested_questions) || props.suggested_questions.length < 2) {
+    throw new Error("renderChatPage: at least 2 suggested_questions required");
   }
 
   const anchors: string[] = [];

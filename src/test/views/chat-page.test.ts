@@ -6,9 +6,8 @@ describe("renderChatPage", () => {
     display_name: "Jane Doe",
     headline: "Senior backend engineer",
     suggested_questions: [
-      "What's your strongest backend stack?",
-      "Tell me about your last role.",
-      "Do you have on-call experience?",
+      "Tell me about your background.",
+      "What are your standout achievements?",
     ],
     theme: 'light' as const,
   };
@@ -39,10 +38,10 @@ describe("renderChatPage", () => {
     expect(html).toContain("Berlin");
   });
 
-  it("renders at least 3 suggested-question chip controls", () => {
+  it("renders at least 2 suggested-question chip controls", () => {
     const html = renderChatPage(baseProps);
     const matches = html.match(/class="chip"/g) ?? [];
-    expect(matches.length).toBeGreaterThanOrEqual(3);
+    expect(matches.length).toBeGreaterThanOrEqual(2);
   });
 
   it("includes a textarea/input for the message and a submit button", () => {
@@ -63,9 +62,9 @@ describe("renderChatPage", () => {
     expect(html).toContain("--color-accent: #aa11bb");
   });
 
-  it("throws when fewer than 3 suggested questions are provided", () => {
+  it("throws when fewer than 2 suggested questions are provided", () => {
     expect(() =>
-      renderChatPage({ ...baseProps, suggested_questions: ["only one", "only two"] }),
+      renderChatPage({ ...baseProps, suggested_questions: ["only one"] }),
     ).toThrow();
   });
 });

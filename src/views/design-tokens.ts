@@ -212,7 +212,7 @@ body {
   background-image: radial-gradient(ellipse 80% 50% at 50% -20%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 70%);
 }
 .page {
-  max-width: 760px;
+  max-width: 880px;
   margin: 0 auto;
   padding: var(--space-7) var(--space-4) var(--space-5);
   min-height: 100vh;
@@ -471,6 +471,11 @@ pre { padding: var(--space-3) var(--space-4); overflow-x: auto; }
 .typing-indicator .dot:nth-child(3) { animation-delay: 0.4s; }
 
 .page-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0;
   text-align: center;
   padding: var(--space-5) var(--space-3) var(--space-4);
   margin-top: var(--space-5);
@@ -479,6 +484,7 @@ pre { padding: var(--space-3) var(--space-4); overflow-x: auto; }
   color: var(--text-muted);
   letter-spacing: 0.02em;
 }
+.page-footer > span { white-space: nowrap; }
 .page-footer a { color: var(--text-secondary); text-decoration: underline; text-underline-offset: 2px; }
 .page-footer a:hover { color: var(--accent); }
 .page-footer .sep { margin: 0 var(--space-2); opacity: 0.4; }
