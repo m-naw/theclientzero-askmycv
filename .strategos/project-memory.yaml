@@ -422,3 +422,22 @@ entries:
       - docs/checkpoints/
       - docs/SPEC_CORRECTIONS.md
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G8
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-19T12:05:33.054Z
+    summary: "Goal G8: Full v2 acceptance test suite and regression sweep completed."
+    findings:
+      - category: observation
+        text: "All 11 done-when criteria are MET. pnpm test passes with 292 tests (42
+          files), well above the 234 minimum (214 baseline + 20 acceptance
+          tests). pnpm build, typecheck, and lint all exit cleanly. Both
+          required docs files exist. All four structural regex checks against
+          src/__tests__ confirm the expected test coverage patterns (Test 20 /
+          forgot-password, chat 503 not-configured, KV/spend failure, admin 404
+          unconfigured). wrangler.toml contains no forbidden mock identifier
+          prefixes. Verdict: PASS."
+    affected_files:
+      - src/__tests__/
+      - docs/checkpoints/
+      - docs/SPEC_CORRECTIONS.md
+    baseline_after_goal: goal-completion gate passed (build + tests green)
