@@ -38,7 +38,7 @@ Complete every item on this checklist before deploying AskMyCV. Each item links 
 ## Repository
 
 - [ ] **Fork of this repository available in your GitHub account**
-  On https://github.com/m-naw/theclientzero-askmycv, click **Fork**, then select your account.
+  Visit https://github.com/m-naw/theclientzero-askmycv and click **Fork**, then select your account.
   After forking, confirm that `https://github.com/<your-username>/theclientzero-askmycv` exists.
 
 ---
@@ -46,11 +46,11 @@ Complete every item on this checklist before deploying AskMyCV. Each item links 
 ## Anthropic API key
 
 - [ ] **API key created and copied**
-  In https://console.anthropic.com/settings/keys, click **Create key**.
+  Go to https://console.anthropic.com/settings/keys and click **Create key**.
   Copy the full value (starts with `sk-ant-`). You will paste this into the setup form.
 
 - [ ] **Billing method active on your Anthropic account**
-  In https://console.anthropic.com/settings/billing, confirm a payment method is attached and has available credit.
+  Go to https://console.anthropic.com/settings/billing and confirm a payment method is attached and has available credit.
   Without an active billing method, API calls fail with a 401 error.
 
 ---
@@ -58,7 +58,7 @@ Complete every item on this checklist before deploying AskMyCV. Each item links 
 ## Optional: Cloudflare Access
 
 - [ ] **Zero Trust team domain configured** (only if you plan to use Cloudflare Access)
-  In https://one.cloudflare.com/, complete the Zero Trust onboarding to set a team subdomain.
+  Go to https://one.cloudflare.com/ and complete the Zero Trust onboarding to set a team subdomain.
   See [docs/ACCESS_FALLBACK.md](./ACCESS_FALLBACK.md) for full setup instructions.
 
 ---
