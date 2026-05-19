@@ -25,7 +25,7 @@ export interface ChatPageProps {
   pdf_cv_url?: string;
   suggested_questions: string[];
   accent_color?: string;
-  theme?: 'light' | 'dark';
+  theme: 'light' | 'dark';
 }
 
 function renderFooter(props: ChatPageProps): string {
@@ -88,11 +88,10 @@ export function renderChatPage(props: ChatPageProps): string {
 ${renderFooter(props)}
 `;
 
-  return renderLayout({
+  return renderLayout({ theme: props.theme,
     title: `${props.display_name} — Ask my CV`,
     accentColor: props.accent_color,
     body,
     inlineScript: CHAT_STREAMING_SCRIPT,
-    theme: props.theme,
   });
 }

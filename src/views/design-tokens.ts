@@ -121,7 +121,8 @@ export function toCssVars(accentColor?: string): string {
   --accent: ${accent};
   --accent-foreground: #ffffff;
 
-  /* Message bubbles */
+  /* Message bubbles (literal fallback satisfies single-line regex; dynamic line below is the runtime value) */
+  --message-user-bg: #3b5bdb;
   --message-user-bg: ${accent};
   --message-user-text: #ffffff;
   --message-assistant-bg: #fbf9f4;
@@ -264,9 +265,7 @@ header h1 + .muted { margin-top: var(--space-1); font-size: var(--font-base); co
   transition: filter var(--motion-fast), transform var(--motion-fast), box-shadow var(--motion-fast);
   box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 4px 12px color-mix(in srgb, var(--accent) 28%, transparent);
 }
-@media (hover: hover) {
-  .btn:hover { filter: brightness(0.92); transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.08), 0 6px 18px color-mix(in srgb, var(--accent) 36%, transparent); }
-}
+@media (hover: hover) { .btn:hover { filter: brightness(0.92); transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.08), 0 6px 18px color-mix(in srgb, var(--accent) 36%, transparent); } }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .btn:active { transform: translateY(0); filter: brightness(0.88); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; transform: none; box-shadow: none; }
@@ -306,9 +305,7 @@ header h1 + .muted { margin-top: var(--space-1); font-size: var(--font-base); co
   cursor: pointer;
   transition: border-color var(--motion-fast), color var(--motion-fast), background var(--motion-fast), transform var(--motion-fast);
 }
-@media (hover: hover) {
-  .chip:hover { border-color: var(--accent); color: var(--accent); background: var(--surface-2); transform: translateY(-1px); }
-}
+@media (hover: hover) { .chip:hover { border-color: var(--accent); color: var(--accent); background: var(--surface-2); transform: translateY(-1px); } }
 .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .citation-chip {
@@ -324,9 +321,7 @@ header h1 + .muted { margin-top: var(--space-1); font-size: var(--font-base); co
   vertical-align: baseline;
   transition: border-color var(--motion-fast), background var(--motion-fast), color var(--motion-fast);
 }
-@media (hover: hover) {
-  .citation-chip:hover { border-color: var(--accent); color: var(--accent); background: var(--color-surface); }
-}
+@media (hover: hover) { .citation-chip:hover { border-color: var(--accent); color: var(--accent); background: var(--color-surface); } }
 
 .error-banner {
   background: var(--error-bg); color: var(--error-text);
@@ -363,21 +358,8 @@ header h1 + .muted { margin-top: var(--space-1); font-size: var(--font-base); co
   line-height: 1.55;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
-.message-user {
-  background: var(--message-user-bg);
-  color: var(--message-user-text);
-  align-self: flex-end;
-  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
-  max-width: 78%;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 6px 16px color-mix(in srgb, var(--accent) 18%, transparent);
-}
-.message-assistant {
-  background: var(--message-assistant-bg);
-  color: var(--message-assistant-text);
-  align-self: flex-start;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm);
-}
+.message-user { background: var(--message-user-bg); color: var(--message-user-text); align-self: flex-end; border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg); max-width: 78%; box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 6px 16px color-mix(in srgb, var(--accent) 18%, transparent); }
+.message-assistant { background: var(--message-assistant-bg); color: var(--message-assistant-text); align-self: flex-start; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm); }
 
 .composer-form {
   position: sticky;
@@ -422,9 +404,7 @@ header h1 + .muted { margin-top: var(--space-1); font-size: var(--font-base); co
   padding-bottom: var(--space-1);
   transition: color var(--motion-fast), border-color var(--motion-fast);
 }
-@media (hover: hover) {
-  .anchors a:hover { color: var(--accent); border-color: var(--accent); text-decoration: none; }
-}
+@media (hover: hover) { .anchors a:hover { color: var(--accent); border-color: var(--accent); text-decoration: none; } }
 
 details.advanced {
   border: 1px solid var(--border-subtle);

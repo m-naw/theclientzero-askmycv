@@ -10,6 +10,7 @@ describe("renderChatPage", () => {
       "Tell me about your last role.",
       "Do you have on-call experience?",
     ],
+    theme: 'light' as const,
   };
 
   it("renders display_name and headline as plain text", () => {
