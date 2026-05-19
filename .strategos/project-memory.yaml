@@ -441,3 +441,25 @@ entries:
       - docs/checkpoints/
       - docs/SPEC_CORRECTIONS.md
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G8b
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-19T13:21:31.847Z
+    summary: "Goal G8b: Chat UI redesign — wire theme through render path, build
+      semantic design system, ship sexy production-grade visual completed
+      (holistic)."
+    findings:
+      - category: observation
+        text: "All 19 criteria MET. All 16 structural checks confirmed by pre-check
+          evidence. All 3 functional checks verified by running commands: pnpm
+          build passes, pnpm test passes (288 tests across 39 files), login-flow
+          integration test passes (6 tests). Iteration G8b is complete — theme
+          wiring, semantic design system, visual component treatments,
+          accessibility rules, and deploy script are all in place."
+    affected_files:
+      - src/views/design-tokens.ts
+      - src/views/chat-page.ts
+      - src/views/layout.ts
+      - src/routes/index.ts
+      - package.json
+      - .strategos/skill-load-receipt.json
+    baseline_after_goal: goal-completion gate passed (build + tests green)
