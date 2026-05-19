@@ -42,6 +42,7 @@ import { hashPassword } from "../auth/password";
 import { createSessionCookie } from "../auth/session";
 import { ADMIN_PASSWORD_HASH_KEY } from "../types/auth";
 import { checkSetupRateLimit } from "../abuse/rate-limit";
+import { isSafeUrl } from "../lib/url";
 import type { Env } from "../env";
 
 const HTML_HEADERS = { "content-type": "text/html; charset=utf-8" } as const;
@@ -228,6 +229,18 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
       "cv_markdown",
       `cv_markdown must be between ${CV_MIN_LENGTH} and ${CV_MAX_LENGTH} characters`,
     );
+  }
+
+  // ----- 3b. URL scheme allow-list (SDD-4) ----------------------------
+  // linkedin_url / github_url / pdf_cv_url are rendered as <a href="..."> in
+  // the public view. escapeHtml does not block dangerous schemes — reject
+  // anything that is not empty / http:// / https:// at the input boundary so
+  // a stored `javascript:alert(...)` can never reach a visitor's browser.
+  for (const urlField of ["linkedin_url", "github_url", "pdf_cv_url"] as const) {
+    const raw = readField(form, urlField);
+    if (!isSafeUrl(raw)) {
+      return inlineError(urlField, "URL must start with http:// or https://");
+    }
   }
 
   // ----- 4. admin_password validation ----------------------------------

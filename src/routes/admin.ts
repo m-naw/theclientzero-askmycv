@@ -19,6 +19,7 @@ import {
 import { verifyPassword, hashPassword } from "../auth/password";
 import { ADMIN_PASSWORD_HASH_KEY } from "../types/auth";
 import { checkLoginRateLimit } from "../abuse/rate-limit";
+import { isSafeUrl } from "../lib/url";
 import { renderAdminForm } from "../views/admin-form";
 import { renderAdminLoginForm } from "../views/admin-login";
 import {
@@ -192,6 +193,16 @@ export async function handleAdminSave(
   const daily_budget_usd = Number(daily_budget_raw);
   if (!Number.isFinite(daily_budget_usd) || daily_budget_usd <= 0) {
     return adminInlineError(form, "daily_budget_usd", "daily_budget_usd must be a positive number");
+  }
+
+  // URL scheme allow-list (SDD-4) — reject non-http(s) schemes at the input
+  // boundary so a stored `javascript:alert(...)` value can never reach the
+  // public view's <a href="..."> rendering.
+  for (const urlField of ["linkedin_url", "github_url", "pdf_cv_url"] as const) {
+    const raw = readField(form, urlField);
+    if (!isSafeUrl(raw)) {
+      return adminInlineError(form, urlField, "URL must start with http:// or https://");
+    }
   }
 
   // Optional fields
