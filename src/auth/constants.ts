@@ -14,3 +14,21 @@ export const LOGIN_RATE_LIMIT_MAX = 10;
 
 /** Login rate-limit window duration in milliseconds (1 hour). */
 export const LOGIN_RATE_LIMIT_WINDOW_MS = 3_600_000;
+
+/**
+ * Maximum POST /setup attempts per IP within the setup rate-limit window.
+ *
+ * The legitimate operator needs at most a handful of attempts within the
+ * 10-minute setup window (typos, validation errors). 10 attempts tolerates
+ * honest mistakes while strictly limiting brute-force candidates an attacker
+ * can submit before the window closes.
+ */
+export const SETUP_RATE_LIMIT_MAX = 10;
+
+/**
+ * Setup rate-limit window duration in milliseconds (10 minutes).
+ *
+ * Matches SETUP_WINDOW_MS — once the setup window closes, the upstream gate
+ * rejects POST /setup anyway, so a longer window adds no defensive value.
+ */
+export const SETUP_RATE_LIMIT_WINDOW_MS = 600_000;

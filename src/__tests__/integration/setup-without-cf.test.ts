@@ -17,6 +17,8 @@ import worker from "../../worker";
 import { TEST_JWKS_KV_KEY } from "../../routes/jwks-source";
 import { ADMIN_PASSWORD_HASH_KEY } from "../../types/auth";
 import { SESSION_COOKIE_NAME } from "../../auth/session";
+import { SETUP_RATE_LIMIT_MAX } from "../../auth/constants";
+import { SETUP_RATE_LIMIT_PREFIX } from "../../abuse/rate-limit";
 import type { StoredConfig } from "../../types/config";
 
 const ANTHROPIC_HOST = "https://anthropic-mock-nocf.test";
@@ -41,6 +43,11 @@ async function clearKv(): Promise<void> {
     TEST_JWKS_KV_KEY,
     ADMIN_PASSWORD_HASH_KEY,
     "cookie_signing_secret",
+    // SDD-2: setup rate-limit counters keyed by CF-Connecting-IP (and the
+    // "unknown" fallback used when the header is absent in tests).
+    `${SETUP_RATE_LIMIT_PREFIX}unknown`,
+    `${SETUP_RATE_LIMIT_PREFIX}10.0.0.1`,
+    `${SETUP_RATE_LIMIT_PREFIX}10.0.0.2`,
   ]) {
     await kv.delete(key);
   }
@@ -260,6 +267,93 @@ describe("Setup without Cloudflare Access JWT", () => {
     expect(res.status).toBe(303);
     expect(await getEnv().STATE.get("config")).not.toBeNull();
     expect(await getEnv().STATE.get(ADMIN_PASSWORD_HASH_KEY)).not.toBeNull();
+  });
+
+  // ---------------------------------------------------------------------
+  // SDD-2: per-IP rate limit on POST /setup
+  // ---------------------------------------------------------------------
+  it("SDD-2: N consecutive POSTs from same IP eventually trip 429 with Retry-After", async () => {
+    mockAnthropicOk();
+    const ip = "10.0.0.1";
+
+    // First SETUP_RATE_LIMIT_MAX requests are allowed by the rate limiter.
+    // They may fail downstream gates (e.g., admin_password_hash already set
+    // after the first successful POST), but the rate-limit gate itself
+    // must let them through.
+    for (let i = 0; i < SETUP_RATE_LIMIT_MAX; i++) {
+      const res = await runFetch(
+        new Request("https://example.test/setup", {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            "CF-Connecting-IP": ip,
+          },
+          body: makeSetupBody().toString(),
+        }),
+      );
+      // Must NOT be 429 — rate-limit gate has not yet tripped.
+      expect(res.status).not.toBe(429);
+    }
+
+    // The (MAX+1)th request from the same IP must trip the rate limiter.
+    const blocked = await runFetch(
+      new Request("https://example.test/setup", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          "CF-Connecting-IP": ip,
+        },
+        body: makeSetupBody().toString(),
+      }),
+    );
+    expect(blocked.status).toBe(429);
+    const retryAfter = blocked.headers.get("Retry-After");
+    expect(retryAfter).not.toBeNull();
+    expect(Number(retryAfter)).toBeGreaterThan(0);
+  });
+
+  it("SDD-2: rate limit is per-IP — a blocked IP does not affect a different IP", async () => {
+    mockAnthropicOk();
+    const ipA = "10.0.0.1";
+    const ipB = "10.0.0.2";
+
+    // Exhaust ipA's quota and confirm the next request from ipA is blocked.
+    for (let i = 0; i < SETUP_RATE_LIMIT_MAX; i++) {
+      await runFetch(
+        new Request("https://example.test/setup", {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            "CF-Connecting-IP": ipA,
+          },
+          body: makeSetupBody().toString(),
+        }),
+      );
+    }
+    const ipAblocked = await runFetch(
+      new Request("https://example.test/setup", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          "CF-Connecting-IP": ipA,
+        },
+        body: makeSetupBody().toString(),
+      }),
+    );
+    expect(ipAblocked.status).toBe(429);
+
+    // ipB has its own independent quota — its first POST must not be 429.
+    const ipBfirst = await runFetch(
+      new Request("https://example.test/setup", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          "CF-Connecting-IP": ipB,
+        },
+        body: makeSetupBody().toString(),
+      }),
+    );
+    expect(ipBfirst.status).not.toBe(429);
   });
 
   it("GET /admin without session cookie returns 303 redirect to /login?next=", async () => {

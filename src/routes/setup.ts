@@ -41,6 +41,7 @@ import { readAccessJwt } from "../auth/access-token";
 import { hashPassword } from "../auth/password";
 import { createSessionCookie } from "../auth/session";
 import { ADMIN_PASSWORD_HASH_KEY } from "../types/auth";
+import { checkSetupRateLimit } from "../abuse/rate-limit";
 import type { Env } from "../env";
 
 const HTML_HEADERS = { "content-type": "text/html; charset=utf-8" } as const;
@@ -96,6 +97,27 @@ async function tryVerifyAccessJwt(
 }
 
 export async function handlePostSetup(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  // ----- 0. per-IP rate limit (SDD-2) ---------------------------------
+  // Mirror the login rate-limit pattern: KV-backed sliding window keyed on
+  // CF-Connecting-IP. Applied BEFORE all other gates so a flood of POSTs
+  // can't even reach the bcrypt/Anthropic-validate cost paths.
+  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+  const { allowed, retryAfterSeconds } = await checkSetupRateLimit(env.STATE, ip);
+  if (!allowed) {
+    // eslint-disable-next-line no-console
+    console.log(JSON.stringify({
+      event: "auth_decision",
+      outcome: "rate_limit_hit",
+      route: "/setup",
+      ip,
+      timestamp: new Date().toISOString(),
+    }));
+    return new Response("Too many setup attempts", {
+      status: 429,
+      headers: { "Retry-After": String(retryAfterSeconds) },
+    });
+  }
+
   // ----- 1. config-exists gate ----------------------------------------
   const existing = await env.STATE.get("config");
   if (existing !== null) {
