@@ -186,6 +186,26 @@ describe("SDD-4: POST /setup URL scheme allow-list", () => {
     expect(await getEnv().STATE.get("config")).toBeNull();
   });
 
+  it("rejects newline-embedded scheme bypass on linkedin_url", async () => {
+    mockAnthropicOk();
+    const res = await runFetch(
+      postSetup(makeSetupBody({ linkedin_url: "https://example.com\njavascript:alert(1)" })),
+    );
+    expect(res.status).toBe(400);
+    expect(await getEnv().STATE.get("config")).toBeNull();
+    const html = await res.text();
+    expect(html).not.toMatch(/href="[^"]*javascript:/i);
+  });
+
+  it("rejects tab-embedded scheme bypass on linkedin_url", async () => {
+    mockAnthropicOk();
+    const res = await runFetch(
+      postSetup(makeSetupBody({ linkedin_url: "https://example.com\tjavascript:alert(1)" })),
+    );
+    expect(res.status).toBe(400);
+    expect(await getEnv().STATE.get("config")).toBeNull();
+  });
+
   it("accepts https:// linkedin_url (regression guard)", async () => {
     mockAnthropicOk();
     const res = await runFetch(

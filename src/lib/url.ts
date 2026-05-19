@@ -37,6 +37,12 @@ export function isSafeUrl(value: string): boolean {
   // leading whitespace in href schemes.
   if (trimmed !== value) return false;
 
+  // Reject any embedded whitespace (newline, tab, CR, space, etc.). Legitimate
+  // http(s) URLs never contain whitespace; an embedded `\n` could otherwise
+  // sneak a `javascript:` payload past the startsWith() prefix check and land
+  // in href= where some parsers tolerate the newline.
+  if (/\s/.test(trimmed)) return false;
+
   // Allow-list: only http:// and https:// (case-insensitive scheme).
   const lower = trimmed.toLowerCase();
   return lower.startsWith("http://") || lower.startsWith("https://");
