@@ -386,3 +386,21 @@ entries:
       - src/routes/admin.ts
       - src/__tests__/setup/setup-acceptance.test.ts
     baseline_after_goal: goal-completion gate passed (build + tests green)
+  - goal_id: G7
+    strategy_id: STR-64bdcbc6-40f5-4bde-a345-6fbb2a4a1eec
+    completed_at: 2026-05-19T10:26:25.341Z
+    summary: "Goal G7: Documentation suite and LICENSE attribution clause completed."
+    findings:
+      - category: observation
+        text: All 16 criteria are MET. The followup sprint
+          (ITR-1779184809824-followup-1) resolved the previously UNMET criterion
+          15 by adding the 4 missing URLs to docs/SOURCES.md. All required doc
+          files exist, README contains the preflight section with correct signup
+          URLs, LICENSE carries the Section 7(b) clause, all docs carry 'Last
+          verified' stamps, SOURCES.md has 15+ cited URLs, all cross-referenced
+          URLs are indexed, and no vague navigation instructions are present.
+    affected_files:
+      - docs/
+      - README.md
+      - LICENSE
+    baseline_after_goal: goal-completion gate passed (build + tests green)
