@@ -20,6 +20,7 @@ import { verifyPassword } from "../auth/password";
 import { ADMIN_PASSWORD_HASH_KEY } from "../types/auth";
 import { checkLoginRateLimit } from "../abuse/rate-limit";
 import { renderAdminForm } from "../views/admin-form";
+import { renderAdminLoginForm } from "../views/admin-login";
 import {
   CV_MIN_LENGTH,
   CV_MAX_LENGTH,
@@ -252,6 +253,35 @@ export async function handleAdminSave(
 }
 
 // ---------------------------------------------------------------------------
+// GET /admin/login
+// ---------------------------------------------------------------------------
+
+/**
+ * Sanitize a `next` redirect target so only same-origin /admin/* paths
+ * are honored. Returns the sanitized path or "/admin" as fallback.
+ */
+function sanitizeNextParam(raw: string | null): string | undefined {
+  if (!raw) return undefined;
+  // Must start with /admin/ or equal /admin exactly
+  if (!raw.startsWith("/admin/") && raw !== "/admin") return undefined;
+  // Reject protocol-relative and absolute URLs
+  if (raw.startsWith("//")) return undefined;
+  // Reject embedded schemes (e.g. javascript:, http:)
+  if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(raw)) return undefined;
+  return raw;
+}
+
+export async function handleAdminLoginGet(
+  request: Request,
+  _env: Env,
+): Promise<Response> {
+  const url = new URL(request.url);
+  const next = sanitizeNextParam(url.searchParams.get("next"));
+  const html = renderAdminLoginForm({ next });
+  return new Response(html, { status: 200, headers: HTML_HEADERS });
+}
+
+// ---------------------------------------------------------------------------
 // POST /admin/login
 // ---------------------------------------------------------------------------
 
@@ -274,13 +304,15 @@ export async function handleAdminLogin(
     return new Response("request body too large", { status: 413 });
   }
 
-  // Parse body for `password` field — accept JSON or form-encoded
+  // Parse body for `password` and `next` fields — accept JSON or form-encoded
   let password = "";
+  let nextRaw: string | null = null;
   const contentType = request.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
     try {
       const body = await request.json() as Record<string, unknown>;
       password = typeof body.password === "string" ? body.password : "";
+      nextRaw = typeof body.next === "string" ? body.next : null;
     } catch {
       return new Response("Invalid JSON body", { status: 400 });
     }
@@ -289,6 +321,8 @@ export async function handleAdminLogin(
       const form = await request.formData();
       const v = form.get("password");
       password = typeof v === "string" ? v : "";
+      const n = form.get("next");
+      nextRaw = typeof n === "string" ? n : null;
     } catch {
       return new Response("Invalid form body", { status: 400 });
     }
@@ -309,9 +343,12 @@ export async function handleAdminLogin(
 
   // Issue session cookie
   const setCookie = await createSessionCookie(env.STATE);
-  return new Response("OK", {
-    status: 200,
-    headers: { "Set-Cookie": setCookie },
+
+  // Redirect to validated next param or fallback to /admin
+  const redirectTo = sanitizeNextParam(nextRaw) ?? "/admin";
+  return new Response(null, {
+    status: 303,
+    headers: { "Set-Cookie": setCookie, Location: redirectTo },
   });
 }
 

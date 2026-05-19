@@ -4,11 +4,15 @@
  * Covers:
  *   a) POST /admin/login with wrong password → 401, delay ≥ 400ms
  *   b) 11th wrong-password attempt from same IP → 429
- *   c) Correct password → 200 with valid Set-Cookie (name, HttpOnly, Secure, SameSite=Lax)
+ *   c) Correct password → 303 with valid Set-Cookie and Location: /admin
+ *   c2) Correct password with valid next= → 303 with Location: next value
+ *   c3) Correct password with invalid next= (open redirect) → 303 Location: /admin
  *   d) GET /admin with valid session + no access_email → 200
- *   e) GET /admin with access_email set + only session cookie → 403
+ *   e) GET /admin with no session → 303 redirect to /admin/login?next=/admin
+ *   e2) GET /admin with access_email set + only session cookie → 403
  *   f) POST /admin/reset with valid session + correct password + "DELETE ALL CONFIG" → KV deleted, Set-Cookie clears
  *   g) POST /admin/reset with wrong confirm → 400, KV intact
+ *   h) GET /admin/login renders form with next= hidden field
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -104,7 +108,7 @@ function resetRequest(
  */
 async function loginAndGetCookieValue(): Promise<string> {
   const res = await runFetch(loginRequest(TEST_PASSWORD, SUCCESS_IP));
-  expect(res.status).toBe(200);
+  expect(res.status).toBe(303);
   const setCookie = res.headers.get("Set-Cookie") ?? "";
   const match = setCookie.match(new RegExp(`${SESSION_COOKIE_NAME}=([^;]+)`));
   if (!match) throw new Error(`No session cookie in Set-Cookie: ${setCookie}`);
@@ -146,16 +150,43 @@ describe("POST /admin/login", () => {
     expect(res11.status).toBe(429);
   }, 20_000);
 
-  // Test (c): correct password → 200 with proper Set-Cookie attributes
-  it("(c) correct password returns 200 with Set-Cookie containing required attributes", async () => {
+  // Test (c): correct password → 303 with Location: /admin and proper Set-Cookie attributes
+  it("(c) correct password returns 303 redirect to /admin with Set-Cookie containing required attributes", async () => {
     const res = await runFetch(loginRequest(TEST_PASSWORD, SUCCESS_IP));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(303);
+    expect(res.headers.get("Location")).toBe("/admin");
 
     const setCookie = res.headers.get("Set-Cookie") ?? "";
     expect(setCookie).toContain(SESSION_COOKIE_NAME);
     expect(setCookie).toContain("HttpOnly");
     expect(setCookie).toContain("Secure");
     expect(setCookie).toContain("SameSite=Lax");
+  });
+
+  // Test (c2): correct password with valid next= → 303 redirect to next value
+  it("(c2) correct password with valid next= returns 303 redirect to next path", async () => {
+    const body = JSON.stringify({ password: TEST_PASSWORD, next: "/admin/save" });
+    const req = new Request("https://example.test/admin/login", {
+      method: "POST",
+      headers: { "content-type": "application/json", "CF-Connecting-IP": SUCCESS_IP },
+      body,
+    });
+    const res = await runFetch(req);
+    expect(res.status).toBe(303);
+    expect(res.headers.get("Location")).toBe("/admin/save");
+  });
+
+  // Test (c3): correct password with invalid next= (open redirect) → 303 to /admin
+  it("(c3) correct password with open-redirect next= returns 303 to /admin fallback", async () => {
+    const body = JSON.stringify({ password: TEST_PASSWORD, next: "https://evil.example" });
+    const req = new Request("https://example.test/admin/login", {
+      method: "POST",
+      headers: { "content-type": "application/json", "CF-Connecting-IP": SUCCESS_IP },
+      body,
+    });
+    const res = await runFetch(req);
+    expect(res.status).toBe(303);
+    expect(res.headers.get("Location")).toBe("/admin");
   });
 });
 
@@ -186,8 +217,21 @@ describe("admin route with no JWT — session cookie only", () => {
     expect(res.status).toBe(200);
   });
 
-  // Test (e): access_email set + only session cookie (no CF JWT) → 403
-  it("(e) valid session cookie but access_email set and no CF JWT returns 403", async () => {
+  // Test (e): no session cookie → 303 redirect to /admin/login?next=/admin
+  it("(e) GET /admin with no session cookie returns 303 redirect to /admin/login?next=%2Fadmin", async () => {
+    await seedConfig({ owner_name: "Test" });
+
+    const req = new Request("https://example.test/admin", { method: "GET" });
+    const res = await runFetch(req);
+    expect(res.status).toBe(303);
+    const location = res.headers.get("Location") ?? "";
+    expect(location).toContain("/admin/login");
+    expect(location).toContain("next=");
+    expect(location).toContain("%2Fadmin");
+  });
+
+  // Test (e2): access_email set + only session cookie (no CF JWT) → 403
+  it("(e2) valid session cookie but access_email set and no CF JWT returns 403", async () => {
     // Config WITH access_email — CF Access JWT becomes required
     await seedConfig({ owner_name: "Test", access_email: "owner@test.example" });
 
@@ -243,5 +287,52 @@ describe("POST /admin/reset", () => {
     const kv = getEnv().STATE;
     expect(await kv.get("config")).not.toBeNull();
     expect(await kv.get("admin_password_hash")).not.toBeNull();
+  });
+});
+
+// ===========================================================================
+// GET /admin/login
+// ===========================================================================
+
+describe("GET /admin/login", () => {
+  beforeEach(async () => {
+    await clearKv();
+  });
+
+  afterEach(async () => {
+    await clearKv();
+  });
+
+  // Test (h): GET /admin/login renders form (no next param)
+  it("(h) GET /admin/login returns 200 with login form", async () => {
+    const req = new Request("https://example.test/admin/login", { method: "GET" });
+    const res = await runFetch(req);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('action="/admin/login"');
+    expect(body).toContain('name="password"');
+    // No hidden next field when next param not provided
+    expect(body).not.toContain('name="next"');
+  });
+
+  // Test (h2): GET /admin/login?next=/admin/save embeds hidden next field
+  it("(h2) GET /admin/login?next=/admin/save embeds hidden next field in form", async () => {
+    const req = new Request("https://example.test/admin/login?next=%2Fadmin%2Fsave", { method: "GET" });
+    const res = await runFetch(req);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('name="next"');
+    expect(body).toContain('/admin/save');
+  });
+
+  // Test (h3): GET /admin/login?next=https://evil.example does NOT embed next (sanitized away)
+  it("(h3) GET /admin/login with open-redirect next= does not embed that value in form", async () => {
+    const req = new Request("https://example.test/admin/login?next=https%3A%2F%2Fevil.example", { method: "GET" });
+    const res = await runFetch(req);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    // Sanitized next returns undefined — no hidden field
+    expect(body).not.toContain('name="next"');
+    expect(body).not.toContain('evil.example');
   });
 });

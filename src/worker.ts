@@ -12,7 +12,7 @@
 import { handleRoot } from "./routes/index";
 import { handlePostSetup, handleGetSetup } from "./routes/setup";
 import { handlePostChat } from "./routes/chat";
-import { handleAdminGet, handleAdminSave, handleAdminLogin, handleAdminReset } from "./routes/admin";
+import { handleAdminGet, handleAdminSave, handleAdminLogin, handleAdminLoginGet, handleAdminReset } from "./routes/admin";
 import { handleLoginGet, handleLoginPost } from "./routes/login";
 import type { Env } from "./env";
 
@@ -46,6 +46,10 @@ export default {
 
     if (url.pathname === "/admin/save" && request.method === "POST") {
       return handleAdminSave(request, env, ctx);
+    }
+
+    if (url.pathname === "/admin/login" && request.method === "GET") {
+      return handleAdminLoginGet(request, env);
     }
 
     if (url.pathname === "/admin/login" && request.method === "POST") {

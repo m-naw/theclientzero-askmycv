@@ -114,7 +114,12 @@ export async function requireAdminAuth(
   // Layer 1: session cookie
   const session = await verifySessionCookie(request, env.STATE);
   if (session === null) {
-    return new Response("Login required", { status: 401 });
+    const url = new URL(request.url);
+    const next = encodeURIComponent(url.pathname + url.search);
+    return new Response(null, {
+      status: 303,
+      headers: { Location: `/admin/login?next=${next}` },
+    });
   }
 
   // Layer 2: optional CF Access JWT when access_email is configured
