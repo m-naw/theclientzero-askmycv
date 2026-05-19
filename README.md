@@ -2,6 +2,16 @@
 
 Self-hosted, BYOK Cloudflare Worker that lets visitors chat with your CV. Open source under AGPL-3.0.
 
+## Before you start
+
+Three accounts are required before deploying:
+
+- **GitHub** — to fork the repository: https://github.com/signup
+- **Cloudflare** — to deploy the Worker and create KV namespaces: https://dash.cloudflare.com/sign-up
+- **Anthropic** — to obtain the API key for Claude: https://console.anthropic.com
+
+See [`docs/PREFLIGHT.md`](./docs/PREFLIGHT.md) for the full pre-deployment checklist including CLI setup and billing verification.
+
 ## Deploy to Cloudflare
 
 One-click self-host on your own Cloudflare account — no signup, no shared service, no per-user costs to anyone but you. Your Anthropic API key lives in *your* Worker's KV namespace; the Worker is yours forever.
