@@ -46,6 +46,11 @@ async function clearKv(): Promise<void> {
   }
 }
 
+/** Seed an active setup window so POST /setup passes the SDD-1 gate. */
+async function seedSetupWindow(): Promise<void> {
+  await getEnv().STATE.put("setup_window_start", String(Date.now()));
+}
+
 async function runFetch(request: Request): Promise<Response> {
   const ctx = createExecutionContext();
   const res = await worker.fetch(request, env as never, ctx);
@@ -97,6 +102,7 @@ describe("Setup without Cloudflare Access JWT", () => {
     (env as Record<string, string>).ANTHROPIC_BASE_URL = ANTHROPIC_HOST;
     (env as Record<string, string>).ACCESS_JWKS_URL_OVERRIDE = "";
     await clearKv();
+    await seedSetupWindow();
   });
 
   afterEach(async () => {
@@ -190,6 +196,70 @@ describe("Setup without Cloudflare Access JWT", () => {
     const adminHtml = await adminRes.text();
     // Admin page should contain config form elements
     expect(adminHtml).toContain('name="cv_markdown"');
+  });
+
+  // ---------------------------------------------------------------------
+  // SDD-1: setup-race protection gates
+  // ---------------------------------------------------------------------
+  it("SDD-1: POST /setup with setup_window_start MISSING returns 403 and writes no config", async () => {
+    mockAnthropicOk();
+    // Remove the seeded window — simulate attacker POSTing before operator
+    // has ever visited GET /.
+    await getEnv().STATE.delete("setup_window_start");
+
+    const res = await runFetch(
+      new Request("https://example.test/setup", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: makeSetupBody().toString(),
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    // No config written.
+    expect(await getEnv().STATE.get("config")).toBeNull();
+    // No admin password hash written.
+    expect(await getEnv().STATE.get(ADMIN_PASSWORD_HASH_KEY)).toBeNull();
+  });
+
+  it("SDD-1: POST /setup with admin_password_hash already present returns 403 and does not overwrite", async () => {
+    mockAnthropicOk();
+    // Simulate a race where the legitimate operator has already sealed the
+    // admin credential, but `config` is somehow absent (or the attacker
+    // arrived between hash-write and config-write — defense in depth).
+    const sentinelHash = "$2b$10$sentinel.value.that.must.not.be.overwritten.aaaaaaaaaaaaaaaaaaaaa";
+    await getEnv().STATE.put(ADMIN_PASSWORD_HASH_KEY, sentinelHash);
+
+    const res = await runFetch(
+      new Request("https://example.test/setup", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: makeSetupBody().toString(),
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    // Sentinel hash unchanged.
+    expect(await getEnv().STATE.get(ADMIN_PASSWORD_HASH_KEY)).toBe(sentinelHash);
+    // No config written.
+    expect(await getEnv().STATE.get("config")).toBeNull();
+  });
+
+  it("SDD-1: POST /setup with valid window AND no admin_password_hash succeeds (regression guard)", async () => {
+    mockAnthropicOk();
+    // beforeEach already seeded setup_window_start; admin hash is absent.
+
+    const res = await runFetch(
+      new Request("https://example.test/setup", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: makeSetupBody().toString(),
+      }),
+    );
+
+    expect(res.status).toBe(303);
+    expect(await getEnv().STATE.get("config")).not.toBeNull();
+    expect(await getEnv().STATE.get(ADMIN_PASSWORD_HASH_KEY)).not.toBeNull();
   });
 
   it("GET /admin without session cookie returns 303 redirect to /login?next=", async () => {

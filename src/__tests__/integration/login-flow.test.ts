@@ -96,6 +96,10 @@ function makeSetupBody(password = ADMIN_PASSWORD): URLSearchParams {
  */
 async function runSetup(): Promise<Response> {
   mockAnthropicOk();
+  // SDD-1: POST /setup now requires setup_window_start to be initialized
+  // (normally done by GET /). Seed it here so login tests can drive setup
+  // directly via POST without first calling GET /.
+  await (env as { STATE: KVNamespace }).STATE.put("setup_window_start", String(Date.now()));
   return runFetch(
     new Request("https://example.test/setup", {
       method: "POST",

@@ -71,6 +71,9 @@ function mockAnthropicOk(): void {
 
 async function runSetup(): Promise<void> {
   mockAnthropicOk();
+  // SDD-1: seed setup_window_start so POST /setup passes the
+  // window-initialized gate without a preceding GET /.
+  await (env as { STATE: KVNamespace }).STATE.put("setup_window_start", String(Date.now()));
   const body = new URLSearchParams();
   body.set("display_name", "Test User");
   body.set("headline", "Test headline for redirect tests");

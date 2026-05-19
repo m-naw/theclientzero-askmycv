@@ -102,9 +102,32 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
     return errorResponse(403, "already configured");
   }
 
-  // ----- 2. window-expired gate ---------------------------------------
+  // ----- 1b. admin-already-sealed gate (race-protection) --------------
+  // If admin_password_hash already exists, the configuration is already
+  // sealed (or partially sealed). Reject any further POST /setup attempts
+  // even if the `config` key is missing — this prevents a first-to-POST
+  // attacker from overwriting credentials.
+  const existingAdminHash = await env.STATE.get(ADMIN_PASSWORD_HASH_KEY);
+  if (existingAdminHash !== null) {
+    return errorResponse(403, "already configured");
+  }
+
+  // ----- 1c. setup-window-initialized gate (race-protection) ----------
+  // The operator must have visited GET / (which initializes
+  // setup_window_start via detectState()) before POST /setup is allowed.
+  // If setup_window_start is missing, an attacker is attempting to seal
+  // the configuration before the legitimate operator has opened the
+  // setup window — reject and render the welcome instructions.
   const windowRaw = await env.STATE.get("setup_window_start");
-  if (windowRaw !== null) {
+  if (windowRaw === null) {
+    return new Response(
+      renderExpiredSetup({ setupWindowStart: "uninitialized" }),
+      { status: 403, headers: HTML_HEADERS },
+    );
+  }
+
+  // ----- 2. window-expired gate ---------------------------------------
+  {
     const startMs = Number(windowRaw);
     if (Number.isFinite(startMs) && Date.now() - startMs > SETUP_WINDOW_MS) {
       const expiredAt = new Date(startMs + SETUP_WINDOW_MS).toISOString();

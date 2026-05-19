@@ -47,6 +47,16 @@ async function clearKv(): Promise<void> {
   }
 }
 
+/**
+ * Seed a fresh setup_window_start so POST /setup tests that don't first
+ * visit GET / can still satisfy the window-initialized gate (SDD-1).
+ * Tests covering window expiry or the missing-window gate should NOT
+ * call this helper and should instead set / delete the key directly.
+ */
+async function seedSetupWindow(): Promise<void> {
+  await getEnv().STATE.put("setup_window_start", String(Date.now()));
+}
+
 function validFormBody(): URLSearchParams {
   const body = new URLSearchParams();
   body.set("display_name", "Jane Doe");
@@ -125,6 +135,7 @@ describe("Setup acceptance tests (spec §12)", () => {
     (env as Record<string, string>).ANTHROPIC_BASE_URL = ANTHROPIC_HOST;
     (env as Record<string, string>).ACCESS_JWKS_URL_OVERRIDE = "";
     await clearKv();
+    await seedSetupWindow();
   });
 
   afterEach(async () => {
@@ -136,6 +147,8 @@ describe("Setup acceptance tests (spec §12)", () => {
   // Timing precision check: setup_window_start is recorded within 5000ms
   // ---------------------------------------------------------------------
   it("setup_window_start is recorded within 5000 ms of the GET / request", async () => {
+    // Cold-start scenario — clear the seeded window before exercising GET /.
+    await getEnv().STATE.delete("setup_window_start");
     const before = Date.now();
     await runFetch(rootRequest());
     const after = Date.now();
@@ -153,6 +166,8 @@ describe("Setup acceptance tests (spec §12)", () => {
   // JWT is no longer required — GET /setup and POST /setup work without JWT.
   // ---------------------------------------------------------------------
   it("Test 1: cold-start GET / serves instructions, records setup_window_start; GET /setup without JWT returns 200", async () => {
+    // Cold-start scenario — clear the seeded window before exercising GET /.
+    await getEnv().STATE.delete("setup_window_start");
     // (1) GET /
     const getRes = await runFetch(rootRequest());
     expect(getRes.status).toBe(200);
@@ -447,6 +462,7 @@ describe("POST /setup field validation", () => {
     (env as Record<string, string>).ANTHROPIC_BASE_URL = ANTHROPIC_HOST;
     (env as Record<string, string>).ACCESS_JWKS_URL_OVERRIDE = "";
     await clearKv();
+    await seedSetupWindow();
   });
 
   afterEach(async () => {
