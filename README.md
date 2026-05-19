@@ -4,6 +4,37 @@ Self-hosted, BYOK Cloudflare Worker that lets visitors chat with your CV. Open s
 
 Built by the Strategos agent orchestrator and shipped following the [TheClientZero](https://x.com/TheClientZero) methodology — the application is spawning itself, and you are its owner and first adopter, making the framework its own first client too.
 
+## Cost & safety — what protects your wallet
+
+You are bringing your own Anthropic key, so you carry the bill. The Worker is designed to make a runaway bill effectively impossible if you follow the simple practices below and keep the built-in limits intact.
+
+**Practices you control (recommended):**
+
+- **No auto top-up.** Leave Anthropic's auto-recharge **off**. The worst case then becomes "the chat stops answering until you top up again" — not an unbounded charge.
+- **Top up in small increments.** A $5 top-up is enough for roughly 5,000 conversations with Haiku. Refill in $5–$10 steps rather than $100+ at once.
+- **Pick the cheaper model first.** The setup form defaults to Claude Haiku 4.5 — roughly 3× cheaper than Sonnet. Switch to Sonnet only if you actually need higher-quality answers.
+- **Set a daily budget you'd be comfortable losing in a worst-case day.** The setup form asks for `daily_budget_usd` (minimum 1 USD). Once the day's spend reaches this number the Worker refuses new Anthropic calls — no matter how much credit the key has left.
+
+**Limits the Worker enforces automatically:**
+
+| Limit | Default | Where |
+|---|---|---|
+| Hard daily Anthropic spend cap (per UTC day) | configured at setup | `daily_budget_usd` |
+| Per-visitor chat rate limit (per IP per hour) | 30 messages | `max_msgs_per_hour` |
+| Login attempts (per IP per hour) | 10 | `LOGIN_RATE_LIMIT_MAX` |
+| `/setup` attempts (per IP per 10 min) | 10 | `SETUP_RATE_LIMIT_MAX` |
+| One-time setup window after first visit | 10 minutes | `SETUP_WINDOW_MS` |
+| Bot/scripted-UA rejection (`curl`, `wget`, `python-requests`, empty UA, …) | always on | `src/abuse/ua.ts` |
+| Request body size cap | 100 KiB | setup + admin |
+| Admin password length | 12–128 chars, bcrypt-hashed | `/setup`, `/admin` |
+| Session cookie | HttpOnly · Secure · SameSite=Lax · HMAC-signed | `src/auth/session.ts` |
+| Security response headers (CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy) | always on | `src/lib/response.ts` |
+| URL inputs (LinkedIn / GitHub / PDF CV) | http(s) only — `javascript:`, `data:`, protocol-relative, whitespace-bypass all rejected | `src/lib/url.ts` |
+| Anthropic API key storage | KV only — never echoed to HTML, logs, or env vars | `src/types/config.ts` |
+| Optional Cloudflare Access SSO for `/admin` | progressive enhancement | see below |
+
+If you want a hard ceiling that doesn't depend on this Worker at all, set a usage budget directly in the Anthropic console — that's the belt to the Worker's suspenders.
+
 ## Before you start
 
 Three accounts are required before deploying:
