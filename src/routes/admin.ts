@@ -19,7 +19,7 @@ import {
 import { verifyPassword, hashPassword } from "../auth/password";
 import { ADMIN_PASSWORD_HASH_KEY } from "../types/auth";
 import { checkLoginRateLimit } from "../abuse/rate-limit";
-import { isSafeUrl } from "../lib/url";
+import { normalizeUrl } from "../lib/url";
 import { sanitizeNext } from "../lib/redirect";
 import { LOGIN_FAIL_DELAY_MS } from "../auth/constants";
 import { htmlResponse, jsonResponse, textResponse } from "../lib/response";
@@ -192,21 +192,29 @@ export async function handleAdminSave(
     return adminInlineError(form, "daily_budget_usd", "daily_budget_usd must be a positive number");
   }
 
-  // URL scheme allow-list (SDD-4) — reject non-http(s) schemes at the input
-  // boundary so a stored `javascript:alert(...)` value can never reach the
-  // public view's <a href="..."> rendering.
+  // URL normalization + scheme allow-list (SDD-4). Accept bare hosts and
+  // prepend https://; reject anything that already declares a non-http(s)
+  // scheme so a stored `javascript:alert(...)` can never reach the public
+  // view's <a href="..."> rendering.
+  const normalizedUrls: Record<"linkedin_url" | "github_url" | "pdf_cv_url", string | undefined> = {
+    linkedin_url: undefined,
+    github_url: undefined,
+    pdf_cv_url: undefined,
+  };
   for (const urlField of ["linkedin_url", "github_url", "pdf_cv_url"] as const) {
     const raw = readField(form, urlField);
-    if (!isSafeUrl(raw)) {
-      return adminInlineError(form, urlField, "URL must start with http:// or https://");
+    const result = normalizeUrl(raw);
+    if (!result.ok) {
+      return adminInlineError(form, urlField, "Enter a valid URL (or leave blank)");
     }
+    normalizedUrls[urlField] = result.value.length > 0 ? result.value : undefined;
   }
 
   // Optional fields
   const location = readField(form, "location") || undefined;
-  const linkedin_url = readField(form, "linkedin_url") || undefined;
-  const github_url = readField(form, "github_url") || undefined;
-  const pdf_cv_url = readField(form, "pdf_cv_url") || undefined;
+  const linkedin_url = normalizedUrls.linkedin_url;
+  const github_url = normalizedUrls.github_url;
+  const pdf_cv_url = normalizedUrls.pdf_cv_url;
   const max_msgs_per_hour_raw = readField(form, "max_msgs_per_hour");
   let max_msgs_per_hour: number | undefined = undefined;
   if (max_msgs_per_hour_raw) {

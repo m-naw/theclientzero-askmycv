@@ -178,8 +178,8 @@ describe("GET / with optional profile fields in StoredConfig", () => {
     const res = await runFetch(rootRequest());
     expect(res.status).toBe(200);
     const html = await res.text();
-    // Default questions should appear (spec: at least 3 visible)
+    // Default questions should appear (spec: at least 2 visible)
     const chipMatches = html.match(/class="chip"/g) ?? [];
-    expect(chipMatches.length).toBeGreaterThanOrEqual(3);
+    expect(chipMatches.length).toBeGreaterThanOrEqual(2);
   });
 });

@@ -42,7 +42,7 @@ import { hashPassword } from "../auth/password";
 import { createSessionCookie } from "../auth/session";
 import { ADMIN_PASSWORD_HASH_KEY } from "../types/auth";
 import { checkSetupRateLimit } from "../abuse/rate-limit";
-import { isSafeUrl } from "../lib/url";
+import { normalizeUrl } from "../lib/url";
 import { htmlResponse, jsonResponse, textResponse } from "../lib/response";
 import type { Env } from "../env";
 
@@ -223,16 +223,23 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
     );
   }
 
-  // ----- 3b. URL scheme allow-list (SDD-4) ----------------------------
+  // ----- 3b. URL normalization + scheme allow-list (SDD-4) ------------
   // linkedin_url / github_url / pdf_cv_url are rendered as <a href="..."> in
-  // the public view. escapeHtml does not block dangerous schemes — reject
-  // anything that is not empty / http:// / https:// at the input boundary so
-  // a stored `javascript:alert(...)` can never reach a visitor's browser.
+  // the public view. We accept bare hostnames (e.g. "linkedin.com/in/jane")
+  // and prepend https:// for the user; we reject anything that already
+  // declares a non-http(s) scheme or contains whitespace.
+  const normalizedUrls: Record<"linkedin_url" | "github_url" | "pdf_cv_url", string | undefined> = {
+    linkedin_url: undefined,
+    github_url: undefined,
+    pdf_cv_url: undefined,
+  };
   for (const urlField of ["linkedin_url", "github_url", "pdf_cv_url"] as const) {
     const raw = readField(form, urlField);
-    if (!isSafeUrl(raw)) {
-      return inlineError(urlField, "URL must start with http:// or https://");
+    const result = normalizeUrl(raw);
+    if (!result.ok) {
+      return inlineError(urlField, "Enter a valid URL (or leave blank)");
     }
+    normalizedUrls[urlField] = result.value.length > 0 ? result.value : undefined;
   }
 
   // ----- 4. admin_password validation ----------------------------------
@@ -244,12 +251,23 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
     );
   }
 
-  // ----- 4b. Optional fields: model + accent_color --------------------
+  // ----- 4b. Optional fields ------------------------------------------
   const modelRaw = readField(form, "model");
   const model = (ALLOWED_MODELS as readonly string[]).includes(modelRaw)
     ? modelRaw
     : DEFAULT_MODEL;
   const accentColor = readField(form, "accent_color").trim() || undefined;
+  const location = readField(form, "location").trim() || undefined;
+  const themeRaw = readField(form, "theme") || "light";
+  const theme: "light" | "dark" = themeRaw === "dark" ? "dark" : "light";
+  const maxMsgsRaw = readField(form, "max_msgs_per_hour");
+  let max_msgs_per_hour: number | undefined;
+  if (maxMsgsRaw) {
+    const parsedMax = Number(maxMsgsRaw);
+    if (Number.isFinite(parsedMax) && Number.isInteger(parsedMax) && parsedMax > 0) {
+      max_msgs_per_hour = parsedMax;
+    }
+  }
 
   // ----- 5. Anthropic test call ---------------------------------------
   const apiKey = parsed.anthropic_api_key as string;
@@ -301,6 +319,12 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
     setup_timestamp: Date.now(),
     model,
     accent_color: accentColor,
+    location,
+    linkedin_url: normalizedUrls.linkedin_url,
+    github_url: normalizedUrls.github_url,
+    pdf_cv_url: normalizedUrls.pdf_cv_url,
+    max_msgs_per_hour,
+    theme,
     ...(cfIdentity
       ? {
           access_email: cfIdentity.email,

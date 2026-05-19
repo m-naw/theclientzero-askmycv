@@ -1,49 +1,52 @@
 /**
  * URL validation helpers (SDD-4).
  *
- * `isSafeUrl` is used at the input boundary (POST /setup and POST /admin/save)
- * to reject any value that, when rendered as an `<a href="...">`, could
- * execute attacker-controlled script in a visitor's session.
+ * `isSafeUrl` is the legacy boolean check used in tests. `normalizeUrl` is the
+ * preferred input-boundary helper: it accepts bare hostnames (e.g.
+ * "linkedin.com/in/jane") and prepends "https://" so users don't have to type
+ * a scheme, while still rejecting any value that would render as a dangerous
+ * <a href="..."> (javascript:, data:, vbscript:, protocol-relative //, values
+ * with embedded whitespace, etc.).
  *
- * Accept rules:
- *   - Empty string (after trim) — caller treats this as "field absent".
- *   - `http://...` or `https://...` (case-insensitive scheme).
+ * Reject rules (apply to both helpers):
+ *   - Value with leading/trailing whitespace.
+ *   - Value with embedded whitespace (space, tab, newline, CR).
+ *   - Value starting with "/" (protocol-relative or absolute path).
+ *   - Value with any scheme other than http:// or https://.
  *
- * Reject everything else, including:
- *   - `javascript:` / `data:` / `vbscript:` / `file:` and any other scheme
- *   - protocol-relative `//host`
- *   - bare hostnames / relative paths
- *   - leading whitespace followed by a scheme (e.g. " javascript:...")
- *
- * Rejection is the default — only the two-prefix allow-list permits a value.
- *
- * Note: output-side escaping (escapeHtml) does NOT block dangerous schemes —
- * it only encodes `<>&"'`. A `javascript:alert(1)` href survives escapeHtml
- * intact and fires on click. The fix must live at the input boundary so the
- * dangerous value never reaches KV in the first place.
+ * Empty string is accepted; caller treats it as "field absent".
  */
-export function isSafeUrl(value: string): boolean {
-  // Treat null/undefined as empty (caller never passes them today, but
-  // defending against drift is cheap).
-  if (typeof value !== "string") return false;
 
-  // Empty (or whitespace-only) → accept; caller stores it as "absent".
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return true;
+interface NormalizeResult {
+  ok: boolean;
+  /** Canonical form to persist. Empty string when input was empty. */
+  value: string;
+}
 
-  // If trim changed the value, the original had leading/trailing whitespace.
-  // Reject — a stored "  javascript:..." value would render as
-  // <a href="  javascript:..."> which still executes in browsers that tolerate
-  // leading whitespace in href schemes.
-  if (trimmed !== value) return false;
+export function normalizeUrl(raw: string): NormalizeResult {
+  if (typeof raw !== "string") return { ok: false, value: "" };
 
-  // Reject any embedded whitespace (newline, tab, CR, space, etc.). Legitimate
-  // http(s) URLs never contain whitespace; an embedded `\n` could otherwise
-  // sneak a `javascript:` payload past the startsWith() prefix check and land
-  // in href= where some parsers tolerate the newline.
-  if (/\s/.test(trimmed)) return false;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return { ok: true, value: "" };
+  if (trimmed !== raw) return { ok: false, value: "" };
+  if (/\s/.test(trimmed)) return { ok: false, value: "" };
+  if (trimmed.startsWith("/")) return { ok: false, value: "" };
 
-  // Allow-list: only http:// and https:// (case-insensitive scheme).
   const lower = trimmed.toLowerCase();
-  return lower.startsWith("http://") || lower.startsWith("https://");
+  if (lower.startsWith("http://") || lower.startsWith("https://")) {
+    return { ok: true, value: trimmed };
+  }
+
+  // Reject any value that already declares a non-http(s) scheme.
+  // RFC-3986 scheme syntax: ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ) ":"
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+    return { ok: false, value: "" };
+  }
+
+  // Bare host or host+path — assume https://.
+  return { ok: true, value: `https://${trimmed}` };
+}
+
+export function isSafeUrl(value: string): boolean {
+  return normalizeUrl(value).ok;
 }

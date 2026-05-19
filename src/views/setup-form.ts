@@ -103,20 +103,20 @@ export function renderConfigForm(opts: FormVariantOptions): string {
     input({
       name: "linkedin_url",
       label: "LinkedIn URL (optional)",
-      type: "url",
       value: p.linkedin_url,
+      placeholder: "linkedin.com/in/jane",
     }),
     input({
       name: "github_url",
       label: "GitHub URL (optional)",
-      type: "url",
       value: p.github_url,
+      placeholder: "github.com/jane",
     }),
     input({
       name: "pdf_cv_url",
       label: "PDF CV URL (optional)",
-      type: "url",
       value: p.pdf_cv_url,
+      placeholder: "example.com/cv.pdf",
     }),
     input({
       name: "accent_color",
@@ -142,7 +142,7 @@ ${input({
   label: "Daily budget (USD)",
   type: "number",
   value: asString(p.daily_budget_usd) ?? "5",
-  hint: "Hard cap on Anthropic spend per UTC day. Range 0.50–100.",
+  hint: "Hard cap on Anthropic spend per UTC day. Minimum 1 USD.",
 })}
 ${input({
   name: "max_msgs_per_hour",

@@ -134,9 +134,9 @@ describe("GET / — handleRoot forwards optional StoredConfig profile fields to 
     // No PDF CV anchor
     expect(html).not.toContain(".pdf");
 
-    // Page should still render with default suggested questions (at least 3 chips)
+    // Page should still render with default suggested questions (at least 2 chips)
     const chipMatches = html.match(/class="chip"/g) ?? [];
-    expect(chipMatches.length).toBeGreaterThanOrEqual(3);
+    expect(chipMatches.length).toBeGreaterThanOrEqual(2);
   });
 
   it("suggested_questions is empty array — falls back to defaults (no empty button set rendered)", async () => {
@@ -151,10 +151,10 @@ describe("GET / — handleRoot forwards optional StoredConfig profile fields to 
     const html = await res.text();
 
     // Should not render empty question buttons — falls back to defaults
-    // The empty array triggers the fallback path in handleRoot (length < 3)
+    // The empty array triggers the fallback path in handleRoot (length < 2)
     // so the page renders with the built-in default questions
     const chipMatches = html.match(/class="chip"/g) ?? [];
-    expect(chipMatches.length).toBeGreaterThanOrEqual(3);
+    expect(chipMatches.length).toBeGreaterThanOrEqual(2);
 
     // The config's empty suggested_questions must not produce zero-chip output
     // (which would indicate renderChatPage was called with an empty array and threw)

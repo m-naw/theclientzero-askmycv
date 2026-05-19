@@ -2,6 +2,8 @@
 
 Self-hosted, BYOK Cloudflare Worker that lets visitors chat with your CV. Open source under AGPL-3.0.
 
+Built by the Strategos agent orchestrator and shipped following the [TheClientZero](https://x.com/TheClientZero) methodology — the application is spawning itself, and you are its owner and first adopter, making the framework its own first client too.
+
 ## Before you start
 
 Three accounts are required before deploying:

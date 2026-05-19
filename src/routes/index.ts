@@ -22,9 +22,8 @@ import { htmlResponse } from "../lib/response";
 
 /** Default starter questions used when none are configured. */
 const DEFAULT_SUGGESTED_QUESTIONS = [
-  "Tell me about a hard technical decision you've made.",
-  "What's the largest team you've led?",
-  "What are your salary expectations?",
+  "Tell me about your background.",
+  "What are your standout achievements?",
 ];
 
 export async function handleRoot(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
@@ -92,10 +91,10 @@ export async function handleRoot(request: Request, env: Env, _ctx: ExecutionCont
         return htmlResponse(renderSetupInstructions(), { status: 200 });
       }
       const cfg = parsed.value;
-      // Use configured suggested_questions when there are at least 3; otherwise
+      // Use configured suggested_questions when there are at least 2; otherwise
       // fall back to the built-in defaults so renderChatPage never throws.
       const suggestedQuestions =
-        Array.isArray(cfg.suggested_questions) && cfg.suggested_questions.length >= 3
+        Array.isArray(cfg.suggested_questions) && cfg.suggested_questions.length >= 2
           ? cfg.suggested_questions
           : DEFAULT_SUGGESTED_QUESTIONS;
       const props: ChatPageProps = {
