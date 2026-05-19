@@ -27,6 +27,7 @@ After the one-click deploy:
 1. Open the Worker URL printed by Cloudflare — you have 10 minutes to complete setup.
 2. Visit `/setup`, fill in your admin password (12–128 chars), Anthropic API key, and CV markdown, then submit. You are redirected to `/admin` and logged in via session cookie.
 3. Share the public URL — visitors can ask questions about your CV without any login.
+4. **Use your own domain (optional).** The Worker is served on `*.workers.dev` by default. To put it on `chat.yourname.com` or similar, register or transfer a domain through Cloudflare Registrar (no markup over wholesale) and attach a custom domain to this Worker from the dashboard — Cloudflare provisions DNS + TLS automatically. See [Cloudflare Registrar](https://www.cloudflare.com/products/registrar/) and [Workers custom domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
 
 See [`cv.example.md`](./cv.example.md) for the expected CV markdown shape.
 
