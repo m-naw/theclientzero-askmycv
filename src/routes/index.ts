@@ -111,6 +111,7 @@ export async function handleRoot(request: Request, env: Env, _ctx: ExecutionCont
         pdf_cv_url: cfg.pdf_cv_url,
         suggested_questions: suggestedQuestions,
         accent_color: cfg.accent_color,
+        theme: cfg.theme ?? 'light',
       };
       return new Response(renderChatPage(props), { status: 200, headers: HTML_HEADERS });
     }

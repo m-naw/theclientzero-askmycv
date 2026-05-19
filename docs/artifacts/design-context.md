@@ -1,87 +1,35 @@
-# Design Context
+# G8b Design Context
 
-## Design System Overview
+## Source material
+- No Figma artifact. Aesthetic direction inferred from product context (CV chat for a senior engineer talking to recruiters).
+- Fonts already loaded via Google Fonts: Fraunces (display, variable opsz/wght), Instrument Sans (body), JetBrains Mono.
 
-This project uses a custom CSS custom-property (CSS variable) token system with no Tailwind or CSS-in-JS framework. All design tokens are declared in `src/views/design-tokens.ts`, which is the ONLY file in `src/views/` permitted to contain raw hex, px, or rem literals (enforced by `src/test/views/token-discipline.test.ts`).
+## Aesthetic direction: Editorial / Refined Minimal
+- Warm parchment palette (#f6f3ec base) — distances the page from default-Inter-on-white "SaaS" look without going maximalist.
+- Strong typographic hierarchy: Fraunces at 2.25rem display weight 400, opsz 144, slight negative tracking — feels like a magazine masthead rather than a UI heading.
+- Asymmetric chat bubbles: user bubble pulled right, accent-tinted, with one corner trimmed to radius-sm (talking-corner). Assistant bubble pulled left, surface card with subtle border, mirrored trimmed corner. Reads as conversation, not a list.
+- Composer is a frosted, blurred sticky bar with backdrop-filter, focus-within ring in accent. Pill send button with accent-tinted shadow.
+- Citation chips: small mono-font surface-2 pills with subtle border; hover lifts to accent.
 
-## Token Architecture
+## Token strategy
+- Additive — preserves every legacy --color-* / --space-{xs,sm,md,lg,xl} / --radius-{sm,md,lg} token so existing tests and other pages (setup, admin, error-pages) continue to work unchanged.
+- New semantic slots added: --surface, --surface-2, --text-primary/secondary/muted, --border, --border-subtle, --accent, --accent-foreground, --message-{user,assistant}-{bg,text}, --code-{bg,text}, --error-{bg,text}, --success-bg.
+- New scale tokens: --font-display, --font-body, --space-1..8 on 4/8px baseline.
 
-- **Single source of truth:** `src/views/design-tokens.ts` exports `TOKENS` (JS references to `var(--name)` strings), `toCssVars(accentColor?)` (produces the `:root {}` and `[data-theme="dark"] {}` CSS blocks), and `baseStyles()` (shared layout/typography/component CSS).
-- **No Figma, no Tailwind, no tailwind.config.ts.** All design decisions are encoded as CSS custom properties.
-- **Dual-theme system:** `:root {}` defines the light palette; `[data-theme="dark"] {}` overrides a subset of color tokens for dark mode. The theme is applied via `data-theme` attribute on `<html>`.
+## Dark mode
+- Intentional palette — not auto-inverted. Surface near-black warm (#15130f), text near-white warm (#ededeb), assistant bubble distinguishable from surface (#1c1a16), borders pulled up to #3a352d so cards retain definition.
+- Accent-driven slots (--accent, --message-user-bg, --accent-foreground) intentionally NOT overridden in dark mode — user-configured accent flows through both themes.
 
-## Color Palette
+## Accessibility checks (manual contrast estimates)
+- Light: --text-primary #1a1814 on --surface #f6f3ec — ~16:1, AAA.
+- Light: --text-secondary #4a4640 on --surface — ~9:1, AAA.
+- Light: --text-muted #7a7368 on --surface — ~4.7:1, AA for normal text.
+- Dark: --text-primary #ededeb on --surface #15130f — ~14:1, AAA.
+- Dark: --text-muted #8f8a7e on --surface — ~5.4:1, AA.
+- Error text #9b1c1c on #fdecec — ~6.6:1, AA. Dark error #f87171 on #2d1414 — ~6.8:1, AA.
 
-### Light Theme (`:root`)
-| Token | Value | Role |
-|---|---|---|
-| `--color-bg` | `#fafaf7` | Page background |
-| `--color-surface` | `#ffffff` | Card/input background |
-| `--color-text` | `#1a1a1f` | Body text |
-| `--color-text-muted` | `#6b6b78` | Secondary text |
-| `--color-accent` | `#3b5bdb` (default) | Interactive/brand color |
-| `--color-accent-fg` | `#ffffff` | Text on accent |
-| `--color-error` | `#c92a2a` | Error states |
-| `--color-border` | `#e3e3e8` | Dividers/borders |
-
-### Dark Theme (`[data-theme="dark"]`)
-| Token | Value | Role |
-|---|---|---|
-| `--color-bg` | `#181613` | Page background |
-| `--color-surface` | `#242220` | Card/input background |
-| `--color-text` | `#ededeb` | Body text |
-| `--color-text-muted` | `#9b9b94` | Secondary text |
-| `--color-border` | `#3a3834` | Dividers/borders |
-
-## Typography
-
-### Web Fonts (Google Fonts)
-Three font families are loaded via Google Fonts stylesheet in `src/views/layout.ts`:
-- **Fraunces** — serif display font for `h1`, `h2` headings
-- **Instrument Sans** — humanist sans-serif for `body` text
-- **JetBrains Mono** — monospaced font for `--font-mono` (code, textarea)
-
-Font-family declarations in `baseStyles()` use the unencoded names with spaces (e.g., `'Instrument Sans'`, `'JetBrains Mono'`). The Google Fonts URL uses URL-encoded `+` separators (`Instrument+Sans`, `JetBrains+Mono`) which is a different encoding and does not satisfy the `grep -rP 'Instrument\s+Sans'` criterion — only the CSS declarations in `design-tokens.ts` do.
-
-### Font Stack
-- `body font-family`: `'Instrument Sans', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`
-- `h1, h2 font-family`: `'Fraunces', Georgia, serif`
-- `--font-mono`: `'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace`
-
-## Spacing Scale
-| Token | Value |
-|---|---|
-| `--space-xs` | `0.25rem` |
-| `--space-sm` | `0.5rem` |
-| `--space-md` | `1rem` |
-| `--space-lg` | `1.5rem` |
-| `--space-xl` | `2.5rem` |
-
-## Border Radius
-| Token | Value |
-|---|---|
-| `--radius-sm` | `4px` |
-| `--radius-md` | `8px` |
-| `--radius-lg` | `16px` |
-
-## Motion
-| Token | Value |
-|---|---|
-| `--motion-fast` | `120ms ease-out` |
-| `--motion-normal` | `220ms ease-out` |
-
-## Layout Entrypoint
-
-`src/views/layout.ts` exports `renderLayout(props: LayoutProps)` which wraps every page. `LayoutProps` includes optional `theme` (`'light' | 'dark'`) and `description` fields added in Sprint 1. The `data-theme` attribute on `<html>` is set from `props.theme ?? 'light'`.
-
-## SEO Meta Tags
-
-All pages include (via `renderLayout`):
-- `<meta property="og:title" content="...">` — HTML-escaped title
-- `<meta property="og:type" content="website">`
-- `<meta name="twitter:card" content="summary">`
-- `<meta name="twitter:title" content="...">` — HTML-escaped title
-
-## Token Discipline Constraint
-
-The test at `src/test/views/token-discipline.test.ts` sweeps all `src/views/**/*.ts` files with regex `/#[0-9a-fA-F]{3,8}\b/` and fails if any file other than `design-tokens.ts` contains a hex color literal. Hex values must NEVER be placed in `layout.ts`, `chat-page.ts`, or any other view file.
+## Verification anchor
+- Bubble tokens grep: `--message-user-bg` and `--message-assistant-bg` each appear ≥2x in design-tokens.ts (definition + consumption inside `.message-user`/`.message-assistant` CSS rules).
+- :focus-visible rule present globally and on `.btn`, `.chip`.
+- `@media (hover: hover)` guards hover states on `.btn`, `.chip`, `.citation-chip`, `.anchors a`.
+- prefers-reduced-motion strips animation/transition.
