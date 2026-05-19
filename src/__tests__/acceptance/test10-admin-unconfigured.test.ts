@@ -42,7 +42,7 @@ async function runFetch(request: Request): Promise<Response> {
   return res;
 }
 
-describe("Acceptance Test 10 — GET /admin unconfigured returns 404 (spec §12)", () => {
+describe("Acceptance Test 10 — unconfigured GET /admin returns 404 (spec §12)", () => {
   beforeEach(async () => {
     (env as Record<string, string>).ACCESS_JWKS_URL_OVERRIDE = "";
     await clearKv();
