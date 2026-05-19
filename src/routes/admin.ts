@@ -20,6 +20,7 @@ import { verifyPassword, hashPassword } from "../auth/password";
 import { ADMIN_PASSWORD_HASH_KEY } from "../types/auth";
 import { checkLoginRateLimit } from "../abuse/rate-limit";
 import { isSafeUrl } from "../lib/url";
+import { htmlResponse, jsonResponse, textResponse } from "../lib/response";
 import { renderAdminForm } from "../views/admin-form";
 import { renderAdminLoginForm } from "../views/admin-login";
 import {
@@ -31,16 +32,10 @@ import {
 } from "../types/config";
 import type { Env } from "../env";
 
-const HTML_HEADERS = { "content-type": "text/html; charset=utf-8" } as const;
-const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" } as const;
-
 const MAX_BODY_BYTES = 100 * 1024; // 100 KiB
 
 function errorJson(status: number, error: string, field?: string): Response {
-  return new Response(JSON.stringify({ error, field }), {
-    status,
-    headers: JSON_HEADERS,
-  });
+  return jsonResponse({ error, field }, { status });
 }
 
 function readField(form: FormData, name: string): string {
@@ -79,7 +74,7 @@ export async function handleAdminGet(
   // Load config first (404 if null)
   const config = await loadConfig(env);
   if (config === null) {
-    return new Response("Not configured", { status: 404 });
+    return textResponse("Not configured", { status: 404 });
   }
 
   // Auth: session cookie + optional CF Access JWT
@@ -107,7 +102,7 @@ export async function handleAdminGet(
     },
   });
 
-  return new Response(html, { status: 200, headers: HTML_HEADERS });
+  return htmlResponse(html, { status: 200 });
 }
 
 // ---------------------------------------------------------------------------
@@ -122,7 +117,7 @@ export async function handleAdminSave(
   // Load config first (404 if null)
   const config = await loadConfig(env);
   if (config === null) {
-    return new Response("Not configured", { status: 404 });
+    return textResponse("Not configured", { status: 404 });
   }
 
   // Auth: session cookie + optional CF Access JWT
@@ -169,7 +164,7 @@ export async function handleAdminSave(
       prefill: buildAdminPrefill(f),
       fieldError: { field, message },
     });
-    return new Response(html, { status: 400, headers: HTML_HEADERS });
+    return htmlResponse(html, { status: 400 });
   }
 
   const display_name = readField(form, "display_name");
@@ -294,7 +289,7 @@ export async function handleAdminSave(
     // will mint a fresh secret on the next login.
     await env.STATE.delete("cookie_signing_secret");
     const clearCookie = clearSessionCookie();
-    return new Response(null, {
+    return textResponse(null, {
       status: 303,
       headers: {
         "Set-Cookie": clearCookie,
@@ -323,7 +318,7 @@ export async function handleAdminSave(
     },
   });
 
-  return new Response(html, { status: 200, headers: HTML_HEADERS });
+  return htmlResponse(html, { status: 200 });
 }
 
 // ---------------------------------------------------------------------------
@@ -352,7 +347,7 @@ export async function handleAdminLoginGet(
   const url = new URL(request.url);
   const next = sanitizeNextParam(url.searchParams.get("next"));
   const html = renderAdminLoginForm({ next });
-  return new Response(html, { status: 200, headers: HTML_HEADERS });
+  return htmlResponse(html, { status: 200 });
 }
 
 // ---------------------------------------------------------------------------
@@ -369,13 +364,13 @@ export async function handleAdminLogin(
   // Check login rate limit
   const { allowed } = await checkLoginRateLimit(env.STATE, ip);
   if (!allowed) {
-    return new Response("Too many login attempts", { status: 429 });
+    return textResponse("Too many login attempts", { status: 429 });
   }
 
   // Body-size guard
   const contentLengthLogin = request.headers.get("content-length");
   if (contentLengthLogin !== null && Number(contentLengthLogin) > MAX_BODY_BYTES) {
-    return new Response("request body too large", { status: 413 });
+    return textResponse("request body too large", { status: 413 });
   }
 
   // Parse body for `password` and `next` fields — accept JSON or form-encoded
@@ -388,7 +383,7 @@ export async function handleAdminLogin(
       password = typeof body.password === "string" ? body.password : "";
       nextRaw = typeof body.next === "string" ? body.next : null;
     } catch {
-      return new Response("Invalid JSON body", { status: 400 });
+      return textResponse("Invalid JSON body", { status: 400 });
     }
   } else {
     try {
@@ -398,14 +393,14 @@ export async function handleAdminLogin(
       const n = form.get("next");
       nextRaw = typeof n === "string" ? n : null;
     } catch {
-      return new Response("Invalid form body", { status: 400 });
+      return textResponse("Invalid form body", { status: 400 });
     }
   }
 
   // Load password hash from KV
   const storedHash = await env.STATE.get(ADMIN_PASSWORD_HASH_KEY);
   if (storedHash === null) {
-    return new Response("Admin password not configured", { status: 401 });
+    return textResponse("Admin password not configured", { status: 401 });
   }
 
   // Verify password
@@ -413,7 +408,7 @@ export async function handleAdminLogin(
   if (!valid) {
     await new Promise((r) => setTimeout(r, 500));
     const loginHtml = renderAdminLoginForm({ error: "Invalid password", next: sanitizeNextParam(nextRaw) });
-    return new Response(loginHtml, { status: 401, headers: HTML_HEADERS });
+    return htmlResponse(loginHtml, { status: 401 });
   }
 
   // Issue session cookie
@@ -421,7 +416,7 @@ export async function handleAdminLogin(
 
   // Redirect to validated next param or fallback to /admin
   const redirectTo = sanitizeNextParam(nextRaw) ?? "/admin";
-  return new Response(null, {
+  return textResponse(null, {
     status: 303,
     headers: { "Set-Cookie": setCookie, Location: redirectTo },
   });
@@ -438,13 +433,13 @@ export async function handleAdminReset(
   // Verify session cookie first
   const session = await verifySessionCookie(request, env.STATE);
   if (session === null) {
-    return new Response("Login required", { status: 401 });
+    return textResponse("Login required", { status: 401 });
   }
 
   // Body-size guard
   const contentLengthReset = request.headers.get("content-length");
   if (contentLengthReset !== null && Number(contentLengthReset) > MAX_BODY_BYTES) {
-    return new Response("request body too large", { status: 413 });
+    return textResponse("request body too large", { status: 413 });
   }
 
   // Parse body for current_password and confirm
@@ -457,7 +452,7 @@ export async function handleAdminReset(
       current_password = typeof body.current_password === "string" ? body.current_password : "";
       confirm = typeof body.confirm === "string" ? body.confirm : "";
     } catch {
-      return new Response("Invalid JSON body", { status: 400 });
+      return textResponse("Invalid JSON body", { status: 400 });
     }
   } else {
     try {
@@ -467,21 +462,21 @@ export async function handleAdminReset(
       current_password = typeof cp === "string" ? cp : "";
       confirm = typeof cf === "string" ? cf : "";
     } catch {
-      return new Response("Invalid form body", { status: 400 });
+      return textResponse("Invalid form body", { status: 400 });
     }
   }
 
   // Load password hash from KV
   const storedHash = await env.STATE.get(ADMIN_PASSWORD_HASH_KEY);
   if (storedHash === null) {
-    return new Response("Admin password not configured", { status: 401 });
+    return textResponse("Admin password not configured", { status: 401 });
   }
 
   // Helper to re-render admin form with a reset error
   async function renderResetError(resetError: string): Promise<Response> {
     const cfg = await loadConfig(env);
     if (cfg === null) {
-      return new Response(resetError, { status: 400 });
+      return textResponse(resetError, { status: 400 });
     }
     const html = renderAdminForm({
       email: cfg.access_email,
@@ -501,7 +496,7 @@ export async function handleAdminReset(
         theme: cfg.theme,
       },
     });
-    return new Response(html, { status: 200, headers: HTML_HEADERS });
+    return htmlResponse(html, { status: 200 });
   }
 
   // Verify current password
@@ -526,7 +521,7 @@ export async function handleAdminReset(
 
   // Clear session cookie and redirect to /setup?reset=1
   const setCookie = clearSessionCookie();
-  return new Response(null, {
+  return textResponse(null, {
     status: 303,
     headers: { "Set-Cookie": setCookie, "Location": "/setup?reset=1" },
   });

@@ -41,11 +41,15 @@ import { computeCostUsd } from "../pricing/index";
 // matching the canonical message exactly (plus loose substring) keeps detection
 // resilient to upstream wording drift.
 import creditErrorShape from "../../references/anthropic-messages-error.json";
+import { jsonResponse, sseResponse } from "../lib/response";
 
-const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" } as const;
 const CREDIT_ERROR_MESSAGE: string = creditErrorShape.error.message;
-const SSE_HEADERS = {
-  "content-type": "text/event-stream; charset=utf-8",
+/**
+ * SSE-specific headers that must accompany the streaming response.
+ * sseResponse() sets Content-Type=text/event-stream and the security baseline;
+ * we add cache + buffering hints here.
+ */
+const SSE_EXTRA_HEADERS = {
   "cache-control": "no-cache, no-transform",
   "x-accel-buffering": "no",
 } as const;
@@ -61,10 +65,7 @@ interface IncomingMessage {
 }
 
 function errorJson(status: number, error: string, extraHeaders?: Record<string, string>): Response {
-  return new Response(JSON.stringify({ error }), {
-    status,
-    headers: { ...JSON_HEADERS, ...extraHeaders },
-  });
+  return jsonResponse({ error }, { status, headers: extraHeaders });
 }
 
 async function readConfig(env: Env): Promise<StoredConfig | null> {
@@ -208,10 +209,7 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
   } catch {
     clearTimeout(timeoutId);
     // AbortError means the timeout fired; any other error is also upstream unavailable.
-    return new Response(JSON.stringify({ error: "upstream_unavailable" }), {
-      status: 502,
-      headers: JSON_HEADERS,
-    });
+    return jsonResponse({ error: "upstream_unavailable" }, { status: 502 });
   }
 
   clearTimeout(timeoutId);
@@ -241,10 +239,7 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
     const body = reason
       ? { error: "upstream_unavailable", reason }
       : { error: "upstream_unavailable" };
-    return new Response(JSON.stringify(body), {
-      status: 502,
-      headers: JSON_HEADERS,
-    });
+    return jsonResponse(body, { status: 502 });
   }
 
   // ----- 9/10. bridge SSE + track usage (spec §9 F6) ----------------
@@ -305,5 +300,5 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
   });
 
   const stream = upstream.body.pipeThrough(transform);
-  return new Response(stream, { status: 200, headers: SSE_HEADERS });
+  return sseResponse(stream, { status: 200, headers: SSE_EXTRA_HEADERS });
 }

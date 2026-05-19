@@ -43,10 +43,8 @@ import { createSessionCookie } from "../auth/session";
 import { ADMIN_PASSWORD_HASH_KEY } from "../types/auth";
 import { checkSetupRateLimit } from "../abuse/rate-limit";
 import { isSafeUrl } from "../lib/url";
+import { htmlResponse, jsonResponse, textResponse } from "../lib/response";
 import type { Env } from "../env";
-
-const HTML_HEADERS = { "content-type": "text/html; charset=utf-8" } as const;
-const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" } as const;
 
 const MAX_BODY_BYTES = 100 * 1024; // 100 KiB
 
@@ -55,10 +53,7 @@ const ADMIN_PASSWORD_MIN = 12;
 const ADMIN_PASSWORD_MAX = 128;
 
 function errorResponse(status: number, error: string, field?: string): Response {
-  return new Response(JSON.stringify({ error, field }), {
-    status,
-    headers: JSON_HEADERS,
-  });
+  return jsonResponse({ error, field }, { status });
 }
 
 interface ParsedFormBody {
@@ -113,7 +108,7 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
       ip,
       timestamp: new Date().toISOString(),
     }));
-    return new Response("Too many setup attempts", {
+    return textResponse("Too many setup attempts", {
       status: 429,
       headers: { "Retry-After": String(retryAfterSeconds) },
     });
@@ -143,9 +138,9 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
   // setup window — reject and render the welcome instructions.
   const windowRaw = await env.STATE.get("setup_window_start");
   if (windowRaw === null) {
-    return new Response(
+    return htmlResponse(
       renderExpiredSetup({ setupWindowStart: "uninitialized" }),
-      { status: 403, headers: HTML_HEADERS },
+      { status: 403 },
     );
   }
 
@@ -154,17 +149,14 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
     const startMs = Number(windowRaw);
     if (Number.isFinite(startMs) && Date.now() - startMs > SETUP_WINDOW_MS) {
       const expiredAt = new Date(startMs + SETUP_WINDOW_MS).toISOString();
-      return new Response(
-        JSON.stringify({
+      return jsonResponse(
+        {
           error: "setup window expired",
           expired_at: expiredAt,
           recovery_summary:
             "Delete the setup_window_start key from the STATE KV namespace at dash.cloudflare.com to open a new 10-minute setup window.",
-        }),
-        {
-          status: 403,
-          headers: JSON_HEADERS,
         },
+        { status: 403 },
       );
     }
   }
@@ -200,9 +192,9 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
   };
 
   function inlineError(field: string, message: string): Response {
-    return new Response(
+    return htmlResponse(
       renderSetupForm({ prefill: prefillFromForm, fieldError: { field, message } }),
-      { status: 400, headers: HTML_HEADERS },
+      { status: 400 },
     );
   }
 
@@ -329,7 +321,7 @@ export async function handlePostSetup(request: Request, env: Env, _ctx: Executio
   const workerUrl = new URL(request.url);
   const rootUrl = `${workerUrl.protocol}//${workerUrl.host}/`;
 
-  return new Response(null, {
+  return textResponse(null, {
     status: 303,
     headers: {
       "Location": rootUrl,
@@ -347,16 +339,18 @@ export async function handleGetSetup(request: Request, env: Env, _ctx: Execution
   const existing = await env.STATE.get("config");
   if (existing !== null) {
     const url = new URL(request.url);
-    return Response.redirect(`${url.protocol}//${url.host}/admin`, 302);
+    return textResponse(null, {
+      status: 302,
+      headers: { Location: `${url.protocol}//${url.host}/admin` },
+    });
   }
 
   const windowRaw = await env.STATE.get("setup_window_start");
   if (windowRaw !== null) {
     const startMs = Number(windowRaw);
     if (Number.isFinite(startMs) && Date.now() - startMs > SETUP_WINDOW_MS) {
-      return new Response(renderExpiredSetup({ setupWindowStart: String(startMs) }), {
+      return htmlResponse(renderExpiredSetup({ setupWindowStart: String(startMs) }), {
         status: 403,
-        headers: HTML_HEADERS,
       });
     }
   }
@@ -377,9 +371,6 @@ export async function handleGetSetup(request: Request, env: Env, _ctx: Execution
     ? "Configuration has been reset. Please set up askmycv again."
     : undefined;
 
-  return new Response(renderSetupForm({ email, resetBanner }), {
-    status: 200,
-    headers: HTML_HEADERS,
-  });
+  return htmlResponse(renderSetupForm({ email, resetBanner }), { status: 200 });
 }
 

@@ -18,8 +18,7 @@ import { parseStoredConfig } from "../types/config";
 import { verifyAccessJwt } from "../auth/access";
 import { readAccessJwt } from "../auth/access-token";
 import { resolveJwksSource } from "./jwks-source";
-
-const HTML_HEADERS = { "content-type": "text/html; charset=utf-8" } as const;
+import { htmlResponse } from "../lib/response";
 
 /** Default starter questions used when none are configured. */
 const DEFAULT_SUGGESTED_QUESTIONS = [
@@ -61,19 +60,16 @@ export async function handleRoot(request: Request, env: Env, _ctx: ExecutionCont
 
   switch (result.state) {
     case State.A_UNCONFIGURED:
-      return new Response(renderSetupInstructions(), { status: 200, headers: HTML_HEADERS });
+      return htmlResponse(renderSetupInstructions(), { status: 200 });
 
     case State.B_SETUP_FORM:
-      return new Response(
-        renderSetupForm({ email: jwtEmail }),
-        { status: 200, headers: HTML_HEADERS },
-      );
+      return htmlResponse(renderSetupForm({ email: jwtEmail }), { status: 200 });
 
     case State.D_EXPIRED: {
       const start = await env.STATE.get("setup_window_start");
-      return new Response(
+      return htmlResponse(
         renderExpiredSetup({ setupWindowStart: start ?? undefined }),
-        { status: 200, headers: HTML_HEADERS },
+        { status: 200 },
       );
     }
 
@@ -84,7 +80,7 @@ export async function handleRoot(request: Request, env: Env, _ctx: ExecutionCont
       if (raw === null) {
         // Race: config disappeared between detectState and now. Fall back
         // to instructions; the next request will re-detect.
-        return new Response(renderSetupInstructions(), { status: 200, headers: HTML_HEADERS });
+        return htmlResponse(renderSetupInstructions(), { status: 200 });
       }
       let parsed: ReturnType<typeof parseStoredConfig>;
       try {
@@ -93,7 +89,7 @@ export async function handleRoot(request: Request, env: Env, _ctx: ExecutionCont
         parsed = { ok: false, error: "config JSON parse failed" };
       }
       if (!parsed.ok) {
-        return new Response(renderSetupInstructions(), { status: 200, headers: HTML_HEADERS });
+        return htmlResponse(renderSetupInstructions(), { status: 200 });
       }
       const cfg = parsed.value;
       // Use configured suggested_questions when there are at least 3; otherwise
@@ -113,7 +109,7 @@ export async function handleRoot(request: Request, env: Env, _ctx: ExecutionCont
         accent_color: cfg.accent_color,
         theme: cfg.theme ?? 'light',
       };
-      return new Response(renderChatPage(props), { status: 200, headers: HTML_HEADERS });
+      return htmlResponse(renderChatPage(props), { status: 200 });
     }
   }
 }

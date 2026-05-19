@@ -12,6 +12,7 @@
  */
 
 import { clearSessionCookie } from "../auth/session";
+import { textResponse } from "../lib/response";
 import type { Env } from "../env";
 
 /** KV key under which the cookie-signing secret is stored. */
@@ -34,7 +35,7 @@ export async function handleLogout(
   // Clear the session cookie on the operator's browser.
   const setCookie = clearSessionCookie();
 
-  return new Response(null, {
+  return textResponse(null, {
     status: 303,
     headers: {
       "Set-Cookie": setCookie,
