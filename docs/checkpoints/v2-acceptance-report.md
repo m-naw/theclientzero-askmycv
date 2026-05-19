@@ -33,7 +33,8 @@ Spec: docs/specs/auto/2026-05-19-full-v2-acceptance-test-suite-and-regression-sw
 - Acceptance test files: 8 (`src/__tests__/acceptance/`)
 - Acceptance tests passing: 25/25
 - Changed-suite total (`vitest --changed` from baseline `dd122de4`): 149/149 PASS
-- Full suite total (2026-05-19, baseline `3eec552`): 292/292 PASS (42 test files)
+- Full suite total (2026-05-19, baseline `16eb7a2`): 288/288 PASS (39 test files)
+- Last quality gate run: 2026-05-19 — typecheck PASS, lint PASS
 
 ## SPEC_CORRECTIONS
 
