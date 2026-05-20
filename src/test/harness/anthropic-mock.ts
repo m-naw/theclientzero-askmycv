@@ -28,6 +28,8 @@ export interface AnthropicMockResponseConfig {
   inputTokens?: number;
   /** cache_read_input_tokens reported on message_start. */
   cacheReadInputTokens?: number;
+  /** cache_creation_input_tokens reported on message_start. */
+  cacheCreationInputTokens?: number;
   /** output_tokens reported on message_delta. */
   outputTokens?: number;
   /** When set, the mock returns this HTTP status instead of streaming. */
@@ -89,6 +91,7 @@ export function createAnthropicMock(): AnthropicMock {
                 usage: {
                   input_tokens: config.inputTokens ?? 0,
                   cache_read_input_tokens: config.cacheReadInputTokens ?? 0,
+                  cache_creation_input_tokens: config.cacheCreationInputTokens ?? 0,
                   output_tokens: 0,
                 },
               },
