@@ -147,26 +147,43 @@ export const CHAT_STREAMING_SCRIPT = `
       }
       var reader = res.body.getReader();
       var dec = new TextDecoder();
+      // SSE frames are delimited by \\n\\n. A single reader.read() may
+      // deliver a partial frame; buffer across reads so a delta whose JSON
+      // straddles a chunk boundary is not lost. Mirrors parseSseFrames /
+      // extractDeltaText in src/views/client/sse-parser.ts (the unit-tested
+      // source of truth — keep this inline copy in sync; the smoke test
+      // src/__tests__/views/streaming-script.test.ts asserts on the
+      // buffering pattern's presence).
+      var sseBuf = '';
+      function processFrame(frame) {
+        var line = frame.split(/\\n/).filter(function (l) { return l.indexOf('data:') === 0; })[0];
+        if (!line) return;
+        try {
+          var data = JSON.parse(line.slice(5).trim());
+          if (data && data.delta && data.delta.type === 'text_delta' && typeof data.delta.text === 'string') {
+            acc += data.delta.text;
+            ensureBubble();
+            renderInto(bubble, acc);
+            maybeAutoscroll(false);
+          }
+        } catch (_e) { /* non-JSON frame */ }
+      }
       function pump() {
         return reader.read().then(function (r) {
           if (r.done) {
+            // Drain any final whole frame still in the buffer at close.
+            if (sseBuf) {
+              var tail = sseBuf;
+              sseBuf = '';
+              processFrame(tail);
+            }
             if (acc) history.push({ role: 'assistant', content: acc });
             return;
           }
-          var chunk = dec.decode(r.value, { stream: true });
-          chunk.split(/\\n\\n/).forEach(function (frame) {
-            var line = frame.split(/\\n/).filter(function (l) { return l.indexOf('data:') === 0; })[0];
-            if (!line) return;
-            try {
-              var data = JSON.parse(line.slice(5).trim());
-              if (data && data.delta && typeof data.delta.text === 'string') {
-                acc += data.delta.text;
-                ensureBubble();
-                renderInto(bubble, acc);
-                maybeAutoscroll(false);
-              }
-            } catch (_e) { /* non-JSON frame */ }
-          });
+          sseBuf += dec.decode(r.value, { stream: true });
+          var parts = sseBuf.split(/\\n\\n/);
+          sseBuf = parts.pop() || '';
+          parts.forEach(processFrame);
           return pump();
         });
       }
