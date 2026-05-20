@@ -245,7 +245,7 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
   }
 
   // ----- 9/10. bridge SSE + track usage (spec §9 F6) ----------------
-  const usage = { input: 0, cached: 0, output: 0 };
+  const usage = { input: 0, cached: 0, created: 0, output: 0 };
 
   const transform = new TransformStream<Uint8Array, Uint8Array>({
     transform(chunk, controller) {
@@ -259,8 +259,19 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
           if (payload.length === 0 || payload === "[DONE]") continue;
           let evt: {
             type?: string;
-            message?: { usage?: { input_tokens?: number; cache_read_input_tokens?: number } };
-            usage?: { output_tokens?: number; input_tokens?: number; cache_read_input_tokens?: number };
+            message?: {
+              usage?: {
+                input_tokens?: number;
+                cache_read_input_tokens?: number;
+                cache_creation_input_tokens?: number;
+              };
+            };
+            usage?: {
+              output_tokens?: number;
+              input_tokens?: number;
+              cache_read_input_tokens?: number;
+              cache_creation_input_tokens?: number;
+            };
           };
           try {
             evt = JSON.parse(payload);
@@ -270,12 +281,16 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
           if (evt.type === "message_start" && evt.message?.usage) {
             usage.input = evt.message.usage.input_tokens ?? 0;
             usage.cached = evt.message.usage.cache_read_input_tokens ?? 0;
+            usage.created = evt.message.usage.cache_creation_input_tokens ?? 0;
           }
           if (evt.type === "message_delta" && evt.usage) {
             if (typeof evt.usage.output_tokens === "number") usage.output = evt.usage.output_tokens;
             if (typeof evt.usage.input_tokens === "number") usage.input = evt.usage.input_tokens;
             if (typeof evt.usage.cache_read_input_tokens === "number") {
               usage.cached = evt.usage.cache_read_input_tokens;
+            }
+            if (typeof evt.usage.cache_creation_input_tokens === "number") {
+              usage.created = evt.usage.cache_creation_input_tokens;
             }
           }
         }
@@ -284,9 +299,32 @@ export async function handlePostChat(request: Request, env: Env, _ctx: Execution
       }
     },
     async flush() {
-      // After the upstream stream completes, persist spend best-effort.
+      // After the upstream stream completes:
+      //   (a) emit a structured observability log so the operator can verify in
+      //       `wrangler tail` whether prompt caching is firing. The existing
+      //       cache marker lives on the CV system block (src/prompts/system.ts);
+      //       on Haiku 4.5 the minimum cacheable prefix is 4096 tokens, so
+      //       shorter CVs silently fail to cache — this log is the only signal.
+      //   (b) persist daily spend best-effort.
       // Use await so the TransformStream infrastructure keeps the execution context
-      // alive until the KV write completes. Failures are swallowed.
+      // alive until the KV write completes. Failures are swallowed — the visitor
+      // stream has already been delivered.
+      try {
+        // eslint-disable-next-line no-console
+        console.log(
+          JSON.stringify({
+            event: "chat_completion",
+            model,
+            input_tokens: usage.input,
+            cache_read_input_tokens: usage.cached,
+            cache_creation_input_tokens: usage.created,
+            output_tokens: usage.output,
+            timestamp: new Date().toISOString(),
+          }),
+        );
+      } catch {
+        /* swallow — observability must never break the visitor stream */
+      }
       try {
         const cost = computeCostUsd({
           model,
