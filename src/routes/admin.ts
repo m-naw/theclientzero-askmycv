@@ -117,10 +117,15 @@ export async function handleAdminSave(
   _ctx: ExecutionContext,
 ): Promise<Response> {
   // Load config first (404 if null)
-  const config = await loadConfig(env);
-  if (config === null) {
+  const maybeConfig = await loadConfig(env);
+  if (maybeConfig === null) {
     return textResponse("Not configured", { status: 404 });
   }
+  // Hoist into a non-null const so the closures below (buildAdminPrefill,
+  // adminInlineError, ...) carry the narrowed type. TypeScript does not
+  // propagate a `const x; if (x === null) return;` narrowing into nested
+  // function declarations — assigning to a fresh const after the guard does.
+  const config = maybeConfig;
 
   // Auth: session cookie + optional CF Access JWT
   const authError = await requireAdminAuth(request, env, config);
